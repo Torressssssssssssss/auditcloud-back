@@ -4,7 +4,7 @@
     "id_empresa": 1,
     "nombre": "Supervisor Demo",
     "correo": "supervisor@auditora-demo.com",
-    "password_hash": "supervisor123",
+    "password_hash": "$2a$10$WI.Tp1o0MGxRNmNNllsAZO9CDN3SUy4MXXXjceLtoy2XKt1C0IjDm",
     "id_rol": 1,
     "activo": true,
     "creado_en": "2025-01-01T00:00:00.000Z"
