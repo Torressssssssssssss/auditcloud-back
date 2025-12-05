@@ -18,7 +18,7 @@ router.post('/login', async (req, res) => {
   if (!user) {
     return res.status(401).json({ message: 'Credenciales inválidas' });
   }
-  const ok = user.password_hash && (user.password_hash === password || bcrypt.compareSync(password, user.password_hash));
+  const ok = user.password_hash && bcrypt.compareSync(password, user.password_hash);
   if (!ok) {
     return res.status(401).json({ message: 'Credenciales inválidas' });
   }
@@ -52,7 +52,7 @@ router.put('/cambiar-password', authenticate, async (req, res) => {
   const usuarios = await readJson('usuarios.json');
   const idx = usuarios.findIndex(u => u.id_usuario === req.user.id_usuario && u.activo);
   if (idx === -1) return res.status(404).json({ message: 'Usuario no encontrado' });
-  const ok = usuarios[idx].password_hash && (usuarios[idx].password_hash === actual || bcrypt.compareSync(actual, usuarios[idx].password_hash));
+  const ok = usuarios[idx].password_hash && bcrypt.compareSync(actual, usuarios[idx].password_hash);
   if (!ok) return res.status(401).json({ message: 'Password actual incorrecto' });
   const hash = bcrypt.hashSync(nueva, 10);
   usuarios[idx].password_hash = hash;
