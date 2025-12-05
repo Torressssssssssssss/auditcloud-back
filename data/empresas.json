@@ -1,0 +1,17 @@
+[
+  {
+    "id_empresa": 1,
+    "id_tipo_empresa": 1,
+    "nombre": "Auditora Demo S.A. de C.V.",
+    "rfc": "AUD010203XX1",
+    "giro": "Servicios de auditoría ambiental",
+    "direccion": "Calle Falsa 123",
+    "ciudad": "Aguascalientes",
+    "estado": "Aguascalientes",
+    "pais": "México",
+    "contacto_nombre": "Supervisor Demo",
+    "contacto_correo": "supervisor@auditora-demo.com",
+    "contacto_telefono": "4490000000",
+    "activo": true
+  }
+]

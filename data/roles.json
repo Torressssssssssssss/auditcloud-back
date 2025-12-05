@@ -1,0 +1,5 @@
+[
+  { "id_rol": 1, "clave": "SUPERVISOR", "nombre": "Supervisor / Jefe de empresa auditora" },
+  { "id_rol": 2, "clave": "AUDITOR", "nombre": "Auditor de campo / Segurista" },
+  { "id_rol": 3, "clave": "CLIENTE", "nombre": "Usuario cliente (empresa auditada)" }
+]
