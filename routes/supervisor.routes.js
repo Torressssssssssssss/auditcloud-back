@@ -67,7 +67,136 @@ router.post('/auditores', authenticate, authorize([1]), async (req, res) => {
   });
 });
 
-module.exports = router;
+// --- Configuración de empresa ---
+// GET /api/supervisor/empresa/:id
+// Obtiene la configuración de la empresa del supervisor
+router.get('/empresa/:id', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = Number(req.params.id);
+    const idUsuario = req.user.id_usuario;
+
+    const empresas = await readJson('empresas.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresaModulos = await readJson('empresa_modulos.json');
+
+    // Verificar que la empresa existe y es del tipo auditora
+    const empresa = empresas.find(e => e.id_empresa === idEmpresa && e.id_tipo_empresa === 1 && e.activo);
+    if (!empresa) {
+      return res.status(404).json({ message: 'Empresa auditora no encontrada o inactiva' });
+    }
+
+    // Verificar que el usuario supervisor pertenece a esa empresa
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== idEmpresa) {
+      return res.status(403).json({ message: 'No tienes permisos para acceder a esta empresa' });
+    }
+
+    // Obtener módulos de la empresa
+    const modulos = empresaModulos
+      .filter(em => em.id_empresa === idEmpresa)
+      .map(em => em.id_modulo);
+
+    res.json({
+      id_empresa: empresa.id_empresa,
+      nombre: empresa.nombre,
+      rfc: empresa.rfc || null,
+      direccion: empresa.direccion || null,
+      telefono: empresa.contacto_telefono || null,
+      modulos: modulos
+    });
+  } catch (error) {
+    console.error('Error al obtener configuración de empresa:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener configuración' });
+  }
+});
+
+// PUT /api/supervisor/empresa/:id
+// Actualiza la configuración de la empresa
+router.put('/empresa/:id', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = Number(req.params.id);
+    const { nombre, rfc, direccion, telefono, modulos } = req.body;
+    const idUsuario = req.user.id_usuario;
+
+    // Validar campos requeridos
+    if (!nombre) {
+      return res.status(400).json({ message: 'nombre es obligatorio' });
+    }
+
+    const empresas = await readJson('empresas.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresaModulos = await readJson('empresa_modulos.json');
+    const modulosAmbientales = await readJson('modulos_ambientales.json');
+
+    // Verificar que la empresa existe y es del tipo auditora
+    const empresaIdx = empresas.findIndex(e => e.id_empresa === idEmpresa && e.id_tipo_empresa === 1 && e.activo);
+    if (empresaIdx === -1) {
+      return res.status(404).json({ message: 'Empresa auditora no encontrada o inactiva' });
+    }
+
+    // Verificar que el usuario supervisor pertenece a esa empresa
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== idEmpresa) {
+      return res.status(403).json({ message: 'No tienes permisos para modificar esta empresa' });
+    }
+
+    // Validar módulos si se proporcionan
+    if (modulos && Array.isArray(modulos)) {
+      for (const idModulo of modulos) {
+        const moduloValido = modulosAmbientales.some(m => m.id_modulo === Number(idModulo));
+        if (!moduloValido) {
+          return res.status(400).json({ message: `Módulo ${idModulo} no válido` });
+        }
+      }
+    }
+
+    // Actualizar datos de la empresa
+    empresas[empresaIdx].nombre = nombre;
+    empresas[empresaIdx].rfc = rfc || null;
+    empresas[empresaIdx].direccion = direccion || null;
+    empresas[empresaIdx].contacto_telefono = telefono || null;
+    // Marcar como visible para clientes (si tiene módulos configurados)
+    // Esto se hará después de actualizar los módulos
+
+    await writeJson('empresas.json', empresas);
+
+    // Actualizar módulos de la empresa
+    // Eliminar módulos existentes de esta empresa
+    const modulosActualizados = empresaModulos.filter(em => em.id_empresa !== idEmpresa);
+    
+    // Agregar nuevos módulos
+    if (modulos && Array.isArray(modulos) && modulos.length > 0) {
+      for (const idModulo of modulos) {
+        const idEmpresaModulo = await getNextId('empresa_modulos.json', 'id_empresa_modulo');
+        modulosActualizados.push({
+          id_empresa_modulo: idEmpresaModulo,
+          id_empresa: idEmpresa,
+          id_modulo: Number(idModulo),
+          registrado_en: new Date().toISOString()
+        });
+      }
+    }
+
+    await writeJson('empresa_modulos.json', modulosActualizados);
+
+    // Obtener módulos actualizados para la respuesta
+    const modulosRespuesta = modulosActualizados
+      .filter(em => em.id_empresa === idEmpresa)
+      .map(em => em.id_modulo);
+
+    res.json({
+      id_empresa: empresas[empresaIdx].id_empresa,
+      nombre: empresas[empresaIdx].nombre,
+      rfc: empresas[empresaIdx].rfc || null,
+      direccion: empresas[empresaIdx].direccion || null,
+      telefono: empresas[empresaIdx].contacto_telefono || null,
+      modulos: modulosRespuesta
+    });
+  } catch (error) {
+    console.error('Error al guardar configuración de empresa:', error);
+    res.status(500).json({ message: error.message || 'Error al guardar configuración' });
+  }
+});
 
 // --- Solicitudes de pago ---
 // POST /api/supervisor/solicitudes-pago
@@ -250,3 +379,255 @@ router.post('/auditorias/:idAuditoria/modulos', authenticate, authorize([1]), as
   await writeJson('auditoria_modulos.json', auditoriaModulos);
   res.status(201).json({ message: 'Módulo asociado a auditoría', auditoria_modulo: nuevo });
 });
+
+// GET /api/supervisor/conversaciones/:idEmpresa
+// Obtener conversaciones de la empresa auditora
+router.get('/conversaciones/:idEmpresa', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = Number(req.params.idEmpresa);
+    const idUsuario = req.user.id_usuario;
+
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const empresas = await readJson('empresas.json');
+    const usuarios = await readJson('usuarios.json');
+
+    // Verificar que el supervisor pertenece a esa empresa
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== idEmpresa) {
+      return res.status(403).json({ message: 'No tienes permisos para ver estas conversaciones' });
+    }
+
+    const conversacionesEmpresa = conversaciones
+      .filter(c => c.id_empresa_auditora === idEmpresa && c.activo)
+      .map(conversacion => {
+        // Obtener último mensaje
+        const ultimosMensajes = mensajes
+          .filter(m => m.id_conversacion === conversacion.id_conversacion)
+          .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en));
+        
+        const ultimoMensaje = ultimosMensajes.length > 0 ? ultimosMensajes[0] : null;
+
+        // Obtener datos del cliente
+        const cliente = usuarios.find(u => u.id_usuario === conversacion.id_cliente);
+        const empresaCliente = empresas.find(e => e.id_empresa === cliente?.id_empresa);
+
+        return {
+          id_conversacion: conversacion.id_conversacion,
+          id_cliente: conversacion.id_cliente,
+          id_empresa_auditora: conversacion.id_empresa_auditora,
+          asunto: conversacion.asunto,
+          fecha_creacion: conversacion.creado_en,
+          cliente: cliente ? {
+            id_usuario: cliente.id_usuario,
+            nombre: cliente.nombre,
+            correo: cliente.correo
+          } : null,
+          empresa_cliente: empresaCliente ? {
+            id_empresa: empresaCliente.id_empresa,
+            nombre: empresaCliente.nombre
+          } : null,
+          ultimo_mensaje: ultimoMensaje ? {
+            id_mensaje: ultimoMensaje.id_mensaje,
+            contenido: ultimoMensaje.contenido,
+            fecha_envio: ultimoMensaje.creado_en,
+            id_remitente: ultimoMensaje.emisor_id,
+            tipo_remitente: ultimoMensaje.emisor_tipo
+          } : null
+        };
+      })
+      .sort((a, b) => {
+        // Ordenar por fecha del último mensaje (más reciente primero)
+        if (!a.ultimo_mensaje && !b.ultimo_mensaje) return 0;
+        if (!a.ultimo_mensaje) return 1;
+        if (!b.ultimo_mensaje) return -1;
+        return new Date(b.ultimo_mensaje.fecha_envio) - new Date(a.ultimo_mensaje.fecha_envio);
+      });
+
+    res.json(conversacionesEmpresa);
+  } catch (error) {
+    console.error('Error al obtener conversaciones:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener conversaciones' });
+  }
+});
+
+// GET /api/supervisor/mensajes/:idConversacion
+// Obtener mensajes de una conversación específica
+router.get('/mensajes/:idConversacion', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idConversacion = Number(req.params.idConversacion);
+    const idUsuario = req.user.id_usuario;
+
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const usuarios = await readJson('usuarios.json');
+
+    const conversacion = conversaciones.find(c => c.id_conversacion === idConversacion && c.activo);
+    if (!conversacion) {
+      return res.status(404).json({ message: 'Conversación no encontrada' });
+    }
+
+    // Verificar que el supervisor pertenece a la empresa auditora de esta conversación
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== conversacion.id_empresa_auditora) {
+      return res.status(403).json({ message: 'No tienes permisos para ver esta conversación' });
+    }
+
+    const mensajesConversacion = mensajes
+      .filter(m => m.id_conversacion === idConversacion)
+      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+    res.json({
+      id_conversacion: conversacion.id_conversacion,
+      id_cliente: conversacion.id_cliente,
+      id_empresa_auditora: conversacion.id_empresa_auditora,
+      asunto: conversacion.asunto,
+      creado_en: conversacion.creado_en,
+      mensajes: mensajesConversacion.map(m => ({
+        id_mensaje: m.id_mensaje,
+        id_remitente: m.emisor_id,
+        tipo_remitente: m.emisor_tipo,
+        contenido: m.contenido,
+        fecha_envio: m.creado_en
+      }))
+    });
+  } catch (error) {
+    console.error('Error al obtener mensajes:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener mensajes' });
+  }
+});
+
+// POST /api/supervisor/mensajes
+// Enviar mensaje desde el supervisor
+router.post('/mensajes', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const { id_conversacion, contenido } = req.body;
+    const idUsuario = req.user.id_usuario;
+
+    if (!id_conversacion || !contenido) {
+      return res.status(400).json({ message: 'id_conversacion y contenido son obligatorios' });
+    }
+
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const usuarios = await readJson('usuarios.json');
+
+    const conversacion = conversaciones.find(c => c.id_conversacion === Number(id_conversacion) && c.activo);
+    if (!conversacion) {
+      return res.status(404).json({ message: 'Conversación no encontrada' });
+    }
+
+    // Verificar que el supervisor pertenece a la empresa auditora de esta conversación
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== conversacion.id_empresa_auditora) {
+      return res.status(403).json({ message: 'No tienes permisos para enviar mensajes en esta conversación' });
+    }
+
+    // Crear el mensaje
+    const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+    const nuevoMensaje = {
+      id_mensaje: idMensaje,
+      id_conversacion: Number(id_conversacion),
+      emisor_tipo: 'SUPERVISOR',
+      emisor_id: idUsuario,
+      contenido: contenido,
+      creado_en: new Date().toISOString()
+    };
+    mensajes.push(nuevoMensaje);
+    await writeJson('mensajes.json', mensajes);
+
+    res.status(201).json({
+      id_mensaje: nuevoMensaje.id_mensaje,
+      id_conversacion: nuevoMensaje.id_conversacion,
+      id_remitente: nuevoMensaje.emisor_id,
+      contenido: nuevoMensaje.contenido,
+      fecha_envio: nuevoMensaje.creado_en
+    });
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ message: error.message || 'Error al enviar mensaje' });
+  }
+});
+
+// GET /api/supervisor/auditorias/:idEmpresa
+// Obtener todas las auditorías de una empresa auditora
+router.get('/auditorias/:idEmpresa', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = Number(req.params.idEmpresa);
+    const idUsuario = req.user.id_usuario;
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 20);
+    const idEstado = req.query.id_estado ? Number(req.query.id_estado) : null;
+
+    const auditorias = await readJson('auditorias.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
+    const estados = await readJson('estados_auditoria.json');
+    const auditoriaModulos = await readJson('auditoria_modulos.json');
+
+    // Verificar que el supervisor pertenece a esa empresa
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== idEmpresa) {
+      return res.status(403).json({ message: 'No tienes permisos para ver estas auditorías' });
+    }
+
+    let all = auditorias.filter(a => a.id_empresa_auditora === idEmpresa);
+    
+    // Filtrar por estado si se proporciona
+    if (idEstado) {
+      all = all.filter(a => a.id_estado === idEstado);
+    }
+
+    // Enriquecer con datos adicionales
+    const auditoriasEnriquecidas = all.map(auditoria => {
+      const cliente = usuarios.find(u => u.id_usuario === auditoria.id_cliente);
+      const empresaCliente = empresas.find(e => e.id_empresa === cliente?.id_empresa);
+      const estado = estados.find(e => e.id_estado === auditoria.id_estado);
+      
+      // Obtener módulos de la auditoría
+      const modulos = auditoriaModulos
+        .filter(am => am.id_auditoria === auditoria.id_auditoria)
+        .map(am => am.id_modulo);
+
+      return {
+        id_auditoria: auditoria.id_auditoria,
+        id_cliente: auditoria.id_cliente,
+        id_empresa_auditora: auditoria.id_empresa_auditora,
+        id_estado: auditoria.id_estado,
+        modulos: modulos,
+        fecha_creacion: auditoria.creada_en || auditoria.creado_en,
+        fecha_inicio: auditoria.fecha_inicio || null,
+        monto: auditoria.monto || null,
+        cliente: cliente ? {
+          id_usuario: cliente.id_usuario,
+          nombre: cliente.nombre,
+          correo: cliente.correo
+        } : null,
+        empresa_cliente: empresaCliente ? {
+          id_empresa: empresaCliente.id_empresa,
+          nombre: empresaCliente.nombre
+        } : null,
+        estado: estado ? {
+          id_estado: estado.id_estado,
+          nombre: estado.nombre || estado.clave
+        } : null
+      };
+    });
+
+    // Paginación
+    const start = (page - 1) * limit;
+    const data = auditoriasEnriquecidas.slice(start, start + limit);
+
+    res.json({
+      total: auditoriasEnriquecidas.length,
+      page,
+      limit,
+      data
+    });
+  } catch (error) {
+    console.error('Error al obtener auditorías:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener auditorías' });
+  }
+});
+
+module.exports = router;

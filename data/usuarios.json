@@ -8,5 +8,25 @@
     "id_rol": 1,
     "activo": true,
     "creado_en": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id_usuario": 2,
+    "id_empresa": 2,
+    "nombre": "Angel Torres",
+    "correo": "angel@towers.com",
+    "password_hash": "$2a$10$5oV4fqt8d4iyZC2OxrVdeurVTIAbdlHzjVmtC8TTJUwkQX/eKr302",
+    "id_rol": 3,
+    "activo": true,
+    "creado_en": "2025-12-05T21:48:49.620Z"
+  },
+  {
+    "id_usuario": 3,
+    "id_empresa": 1,
+    "nombre": "Gustavo Mojica",
+    "correo": "gus@auditor.com",
+    "password_hash": "$2a$10$r9HUn7sBRcZ1CQIUP4E.ruf0aulkN9ztuJlhFOE3pkG6cE7oRyYWy",
+    "id_rol": 2,
+    "activo": true,
+    "creado_en": "2025-12-05T23:50:58.585Z"
   }
 ]
