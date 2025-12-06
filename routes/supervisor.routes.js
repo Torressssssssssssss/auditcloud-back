@@ -246,39 +246,126 @@ router.get('/solicitudes-pago/:idEmpresa', authenticate, authorize([1]), async (
   res.json({ total: all.length, page, limit, data });
 });
 
-// POST /api/supervisor/solicitudes-pago/:idSolicitud/pagar
-// Marca solicitud como PAGADA y crea una auditoría vinculada
-router.post('/solicitudes-pago/:idSolicitud/pagar', authenticate, authorize([1]), async (req, res) => {
-  const idSolicitud = Number(req.params.idSolicitud);
+// Rutas de solicitudes de pago para la empresa auditora (supervisor)
+// - POST /api/supervisor/solicitudes-pago
+//   Crea solicitud de pago: modo supervisor (envía `id_empresa` y `id_cliente`) o
+//   modo por empresa (si solo se envía `id_empresa` se considerará como empresa cliente
+//   y se notificará al usuario principal registrado)
+router.post('/solicitudes-pago', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const { id_empresa, id_cliente, monto, concepto } = req.body;
 
-  const solicitudes = await readJson('solicitudes_pago.json');
-  const auditorias = await readJson('auditorias.json');
+    if (!monto || !concepto) {
+      return res.status(400).json({ message: 'monto y concepto son obligatorios' });
+    }
 
-  const solicitud = solicitudes.find(s => s.id_solicitud === idSolicitud);
-  if (!solicitud) {
-    return res.status(404).json({ message: 'Solicitud no encontrada' });
+    const solicitudes = await readJson('solicitudes_pago.json');
+    const empresas = await readJson('empresas.json');
+    const usuarios = await readJson('usuarios.json');
+
+    // Modo A: supervisor proporciona id_empresa (empresa objetivo) e id_cliente (usuario)
+    if (id_empresa && id_cliente) {
+      const empresaValida = empresas.some(e => e.id_empresa === Number(id_empresa) && e.activo);
+      const clienteValido = usuarios.some(u => u.id_usuario === Number(id_cliente) && u.id_rol === 3 && u.activo);
+      if (!empresaValida) return res.status(404).json({ message: 'Empresa no encontrada o inactiva' });
+      if (!clienteValido) return res.status(404).json({ message: 'Cliente no encontrado o inactivo' });
+
+      const idSolicitud = await getNextId('solicitudes_pago.json', 'id_solicitud');
+      const nueva = {
+        id_solicitud: idSolicitud,
+        id_empresa: Number(id_empresa),
+        id_empresa_auditora: req.user.id_empresa,
+        id_cliente: Number(id_cliente),
+        monto: Number(monto),
+        concepto,
+        id_estado: 1,
+        creado_en: new Date().toISOString(),
+        creado_por_supervisor: req.user.id_usuario
+      };
+
+      solicitudes.push(nueva);
+      await writeJson('solicitudes_pago.json', solicitudes);
+      return res.status(201).json({ message: 'Solicitud de pago creada por supervisor', solicitud: nueva });
+    }
+
+    // Modo B: supervisor proporciona solo id_empresa (empresa cliente) — buscar usuario principal
+    if (id_empresa && !id_cliente) {
+      const empresaObjetivo = empresas.find(e => e.id_empresa === Number(id_empresa) && e.activo);
+      if (!empresaObjetivo) {
+        return res.status(404).json({ message: 'Empresa no encontrada' });
+      }
+      if (empresaObjetivo.id_tipo_empresa !== 2) {
+        return res.status(400).json({ message: 'El ID proporcionado no es una empresa Cliente' });
+      }
+
+      const usuarioPrincipal = usuarios.find(u => u.id_empresa === Number(id_empresa) && u.id_rol === 3 && u.activo);
+      if (!usuarioPrincipal) {
+        return res.status(400).json({ message: 'La empresa existe, pero no tiene usuario administrador registrado' });
+      }
+
+      const idSolicitud = await getNextId('solicitudes_pago.json', 'id_solicitud');
+      const nueva = {
+        id_solicitud: idSolicitud,
+        id_empresa: req.user.id_empresa,
+        id_empresa_auditora: req.user.id_empresa,
+        id_empresa_cliente: Number(id_empresa),
+        id_cliente: usuarioPrincipal.id_usuario,
+        monto: Number(monto),
+        concepto,
+        id_estado: 1,
+        creado_en: new Date().toISOString(),
+        creado_por_supervisor: req.user.id_usuario
+      };
+
+      solicitudes.push(nueva);
+      await writeJson('solicitudes_pago.json', solicitudes);
+      return res.status(201).json({ message: `Solicitud creada para la empresa ${empresaObjetivo.nombre}`, solicitud: nueva });
+    }
+
+    return res.status(400).json({ message: 'Parámetros insuficientes. Envía `id_empresa`+`id_cliente` o al menos `id_empresa`.' });
+  } catch (error) {
+    console.error('Error creando solicitud de pago:', error);
+    res.status(500).json({ message: error.message || 'Error creando solicitud de pago' });
   }
-  if (solicitud.id_estado === 2) {
-    return res.status(400).json({ message: 'La solicitud ya está pagada' });
+});
+
+// GET /api/supervisor/solicitudes-pago
+// Lista solicitudes asociadas a la empresa auditora del supervisor (paginado opcional)
+router.get('/solicitudes-pago', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresaAuditora = req.user.id_empresa;
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 20);
+
+    const solicitudes = await readJson('solicitudes_pago.json');
+    const empresas = await readJson('empresas.json');
+
+    const misSolicitudes = solicitudes.filter(s => s.id_empresa_auditora === idEmpresaAuditora || s.id_empresa === idEmpresaAuditora);
+
+    const data = misSolicitudes.map(s => {
+      let nombreCliente = 'Desconocido';
+      if (s.id_empresa_cliente) {
+        const empresa = empresas.find(e => e.id_empresa === s.id_empresa_cliente);
+        if (empresa) nombreCliente = empresa.nombre;
+      }
+      return {
+        ...s,
+        nombre_empresa_cliente: nombreCliente,
+        es_mio: s.creado_por_supervisor === req.user.id_usuario
+      };
+    });
+
+    data.sort((a, b) => {
+      if (a.id_estado === b.id_estado) return new Date(b.creado_en) - new Date(a.creado_en);
+      return a.id_estado - b.id_estado;
+    });
+
+    const start = (page - 1) * limit;
+    res.json({ total: data.length, page, limit, data: data.slice(start, start + limit) });
+  } catch (error) {
+    console.error('Error al obtener solicitudes del supervisor:', error);
+    res.status(500).json({ message: 'Error al obtener el historial de cobros' });
   }
-
-  solicitud.id_estado = 2; // PAGADA
-  solicitud.pagada_en = new Date().toISOString();
-  await writeJson('solicitudes_pago.json', solicitudes);
-
-  const idAuditoria = await getNextId('auditorias.json', 'id_auditoria');
-  const nuevaAuditoria = {
-    id_auditoria: idAuditoria,
-    id_empresa_auditora: solicitud.id_empresa,
-    id_cliente: solicitud.id_cliente,
-    id_solicitud_pago: solicitud.id_solicitud,
-    id_estado: 1, // CREADA
-    creada_en: new Date().toISOString()
-  };
-  auditorias.push(nuevaAuditoria);
-  await writeJson('auditorias.json', auditorias);
-
-  res.json({ message: 'Pago registrado y auditoría creada', solicitud, auditoria: nuevaAuditoria });
 });
 
 // PUT /api/supervisor/auditorias/:idAuditoria/estado

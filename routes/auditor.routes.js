@@ -104,8 +104,10 @@ router.delete('/evidencias/:idEvidencia', authenticate, authorize([2]), async (r
   res.json({ message: 'Evidencia eliminada' });
 });
 
-// --- NUEVA RUTA PARA SOLICITUDES DE PAGO ---
-// POST /api/auditor/solicitudes-pago
+
+module.exports = router;
+
+// --- Solicitudes de pago (auditor) ---
 // Permite al auditor crear una solicitud de cobro a un cliente
 // POST /api/auditor/solicitudes-pago
 router.post('/solicitudes-pago', authenticate, authorize([2]), async (req, res) => {
@@ -169,4 +171,37 @@ router.post('/solicitudes-pago', authenticate, authorize([2]), async (req, res) 
   });
 });
 
-module.exports = router;
+// GET /api/auditor/solicitudes-pago
+// Lista solicitudes de pago de la empresa auditora del auditor
+router.get('/solicitudes-pago', authenticate, authorize([2]), async (req, res) => {
+  try {
+    const idEmpresaAuditora = req.user.id_empresa;
+    const solicitudes = await readJson('solicitudes_pago.json');
+    const empresas = await readJson('empresas.json');
+
+    const misSolicitudes = solicitudes.filter(s => s.id_empresa_auditora === idEmpresaAuditora || s.id_empresa === idEmpresaAuditora);
+
+    const data = misSolicitudes.map(s => {
+      let nombreCliente = 'Desconocido';
+      if (s.id_empresa_cliente) {
+        const empresa = empresas.find(e => e.id_empresa === s.id_empresa_cliente);
+        if (empresa) nombreCliente = empresa.nombre;
+      }
+      return {
+        ...s,
+        nombre_empresa_cliente: nombreCliente,
+        es_mio: s.creado_por_auditor === req.user.id_usuario
+      };
+    });
+
+    data.sort((a, b) => {
+      if (a.id_estado === b.id_estado) return new Date(b.creado_en) - new Date(a.creado_en);
+      return a.id_estado - b.id_estado;
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error al obtener solicitudes del auditor:', error);
+    res.status(500).json({ message: 'Error al obtener el historial de cobros' });
+  }
+});
