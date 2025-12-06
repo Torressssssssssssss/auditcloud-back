@@ -91,55 +91,101 @@ router.post('/registro', async (req, res) => {
 router.get('/conversaciones/:idCliente', authenticate, authorize([3]), async (req, res) => {
   try {
     const idCliente = Number(req.params.idCliente);
+    
+    // Leemos ambas tablas
     const conversaciones = await readJson('conversaciones.json');
     const mensajes = await readJson('mensajes.json');
     const empresas = await readJson('empresas.json');
 
-    const conversacionesCliente = conversaciones
-      .filter(c => c.id_cliente === idCliente && c.activo)
-      .map(conversacion => {
-        // Obtener último mensaje
-        const ultimosMensajes = mensajes
-          .filter(m => m.id_conversacion === conversacion.id_conversacion)
-          .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en));
-        
-        const ultimoMensaje = ultimosMensajes.length > 0 ? ultimosMensajes[0] : null;
+    // 1. Filtramos las conversaciones de este cliente
+    const misConversaciones = conversaciones.filter(c => c.id_cliente === idCliente && c.activo);
 
-        // Obtener datos de la empresa auditora
-        const empresaAuditora = empresas.find(e => e.id_empresa === conversacion.id_empresa_auditora);
+    // 2. Enriquecemos con el ÚLTIMO mensaje y datos de la empresa
+    const listaFinal = misConversaciones.map(conv => {
+      // Buscar mensajes de esta conversación
+      const msgsDeChat = mensajes.filter(m => m.id_conversacion === conv.id_conversacion);
+      
+      // Obtener el último (asumiendo que insertamos al final)
+      // Si quieres asegurar, puedes hacer un sort por fecha aquí también
+      const ultimoMensaje = msgsDeChat.length > 0 
+        ? msgsDeChat[msgsDeChat.length - 1] 
+        : null;
 
-        return {
-          id_conversacion: conversacion.id_conversacion,
-          id_cliente: conversacion.id_cliente,
-          id_empresa_auditora: conversacion.id_empresa_auditora,
-          asunto: conversacion.asunto,
-          fecha_creacion: conversacion.creado_en,
-          empresa: empresaAuditora ? {
-            id_empresa: empresaAuditora.id_empresa,
-            nombre: empresaAuditora.nombre
-          } : null,
-          ultimo_mensaje: ultimoMensaje ? {
-            id_mensaje: ultimoMensaje.id_mensaje,
-            contenido: ultimoMensaje.contenido,
-            fecha_envio: ultimoMensaje.creado_en,
-            id_remitente: ultimoMensaje.emisor_id
-          } : null
-        };
-      })
-      .sort((a, b) => {
-        // Ordenar por fecha del último mensaje (más reciente primero)
-        if (!a.ultimo_mensaje && !b.ultimo_mensaje) return 0;
-        if (!a.ultimo_mensaje) return 1;
-        if (!b.ultimo_mensaje) return -1;
-        return new Date(b.ultimo_mensaje.fecha_envio) - new Date(a.ultimo_mensaje.fecha_envio);
-      });
+      const empresa = empresas.find(e => e.id_empresa === conv.id_empresa_auditora);
 
-    res.json(conversacionesCliente);
+      return {
+        ...conv,
+        empresa: {
+          id_empresa: empresa?.id_empresa,
+          nombre: empresa?.nombre
+        },
+        ultimo_mensaje: ultimoMensaje
+      };
+    });
+
+    // 3. ORDENAMIENTO CRÍTICO: El más reciente primero
+    listaFinal.sort((a, b) => {
+      const fechaA = a.ultimo_mensaje ? new Date(a.ultimo_mensaje.creado_en) : new Date(a.creado_en);
+      const fechaB = b.ultimo_mensaje ? new Date(b.ultimo_mensaje.creado_en) : new Date(b.creado_en);
+      return fechaB - fechaA; // Descendente (Newest first)
+    });
+
+    res.json(listaFinal);
   } catch (error) {
-    console.error('Error al obtener conversaciones:', error);
-    res.status(500).json({ message: error.message || 'Error al obtener conversaciones' });
+    console.error(error);
+    res.status(500).json({ message: 'Error al cargar conversaciones' });
   }
 });
+
+// GET /api/cliente/mensajes/:idConversacion
+// Carga el historial de un chat específico
+router.get('/mensajes/:idConversacion', authenticate, authorize([3]), async (req, res) => {
+  const idConversacion = Number(req.params.idConversacion);
+  const mensajes = await readJson('mensajes.json');
+  
+  // Filtramos los mensajes de esta conversación
+  const historial = mensajes.filter(m => m.id_conversacion === idConversacion);
+  
+  // Aseguramos orden cronológico (antiguo -> nuevo) para lectura natural
+  historial.sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+  res.json(historial);
+});
+
+// POST /api/cliente/mensajes
+// Envía un mensaje y actualiza la conversación
+router.post('/mensajes', authenticate, authorize([3]), async (req, res) => {
+  const { id_conversacion, contenido } = req.body;
+  const idUsuario = req.user.id_usuario;
+
+  if (!id_conversacion || !contenido) return res.status(400).json({message: 'Faltan datos'});
+
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
+
+  // 1. Guardar el mensaje
+  const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+  const nuevoMensaje = {
+    id_mensaje: idMensaje,
+    id_conversacion: Number(id_conversacion),
+    emisor_tipo: 'CLIENTE',
+    emisor_id: idUsuario,
+    contenido: contenido,
+    creado_en: new Date().toISOString()
+  };
+  mensajes.push(nuevoMensaje);
+  await writeJson('mensajes.json', mensajes);
+
+  // 2. Actualizar timestamp de la conversación (Para que suba en la lista)
+  const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+  if (idxConv !== -1) {
+    conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+    await writeJson('conversaciones.json', conversaciones);
+  }
+
+  res.status(201).json(nuevoMensaje);
+});
+
 
 // POST /api/cliente/conversaciones
 // Crea una conversación nueva entre cliente y empresa auditora

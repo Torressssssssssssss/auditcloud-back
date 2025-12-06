@@ -326,4 +326,106 @@ router.get('/solicitudes-pago', authenticate, authorize([2]), async (req, res) =
   }
 });
 
+// GET /api/auditor/conversaciones
+// El auditor ve las conversaciones de SU empresa con los clientes
+router.get('/conversaciones', authenticate, authorize([2]), async (req, res) => {
+  try {
+    const idEmpresaAuditora = req.user.id_empresa;
+    
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const usuarios = await readJson('usuarios.json'); // Para nombres de clientes
+    const empresas = await readJson('empresas.json'); // Para nombres de empresas cliente
+
+    // 1. Filtrar conversaciones de la empresa del auditor
+    const misConversaciones = conversaciones.filter(c => c.id_empresa_auditora === idEmpresaAuditora && c.activo);
+
+    // 2. Enriquecer con último mensaje y datos del cliente
+    const listaFinal = misConversaciones.map(conv => {
+      // Buscar mensajes
+      const msgs = mensajes.filter(m => m.id_conversacion === conv.id_conversacion);
+      const ultimoMensaje = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+
+      // Buscar datos del cliente (usuario y su empresa)
+      const clienteUser = usuarios.find(u => u.id_usuario === conv.id_cliente);
+      const empresaCliente = clienteUser ? empresas.find(e => e.id_empresa === clienteUser.id_empresa) : null;
+
+      return {
+        ...conv,
+        cliente: {
+          id_usuario: conv.id_cliente,
+          nombre: clienteUser?.nombre || 'Usuario',
+          nombre_empresa: empresaCliente?.nombre || 'Empresa Cliente'
+        },
+        ultimo_mensaje: ultimoMensaje
+      };
+    });
+
+    // 3. Ordenar por fecha (más reciente primero)
+    listaFinal.sort((a, b) => {
+      const fechaA = a.ultimo_mensaje ? new Date(a.ultimo_mensaje.creado_en) : new Date(a.creado_en);
+      const fechaB = b.ultimo_mensaje ? new Date(b.ultimo_mensaje.creado_en) : new Date(b.creado_en);
+      return fechaB - fechaA;
+    });
+
+    res.json(listaFinal);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error cargando conversaciones' });
+  }
+});
+
+// GET /api/auditor/mensajes/:idConversacion
+router.get('/mensajes/:idConversacion', authenticate, authorize([2]), async (req, res) => {
+  const idConversacion = Number(req.params.idConversacion);
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
+
+  // Validar pertenencia
+  const conversacion = conversaciones.find(c => c.id_conversacion === idConversacion);
+  if (!conversacion || conversacion.id_empresa_auditora !== req.user.id_empresa) {
+    return res.status(403).json({ message: 'No tienes permiso para ver esta conversación' });
+  }
+  
+  const historial = mensajes.filter(m => m.id_conversacion === idConversacion);
+  historial.sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+  res.json(historial);
+});
+
+// POST /api/auditor/mensajes
+router.post('/mensajes', authenticate, authorize([2]), async (req, res) => {
+  const { id_conversacion, contenido } = req.body;
+  
+  if (!id_conversacion || !contenido) return res.status(400).json({message: 'Faltan datos'});
+
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
+
+  // Validar pertenencia
+  const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+  if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
+    return res.status(403).json({ message: 'Conversación no válida' });
+  }
+
+  const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+  const nuevoMensaje = {
+    id_mensaje: idMensaje,
+    id_conversacion: Number(id_conversacion),
+    emisor_tipo: 'AUDITOR', // Importante: Se identifica como Auditor
+    emisor_id: req.user.id_usuario,
+    contenido: contenido,
+    creado_en: new Date().toISOString()
+  };
+
+  mensajes.push(nuevoMensaje);
+  await writeJson('mensajes.json', mensajes);
+
+  // Actualizar fecha de conversación
+  conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+  await writeJson('conversaciones.json', conversaciones);
+
+  res.status(201).json(nuevoMensaje);
+});
+
 module.exports = router;

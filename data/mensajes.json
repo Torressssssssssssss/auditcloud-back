@@ -12,47 +12,151 @@
     "id_conversacion": 1,
     "emisor_tipo": "SUPERVISOR",
     "emisor_id": 1,
-    "contenido": "Hola buen dia.",
+    "contenido": "Hola buen dia, ¿en qué podemos ayudarle?",
     "creado_en": "2025-12-05T22:20:22.169Z"
-  },
-  {
-    "id_mensaje": 3,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "hola",
-    "creado_en": "2025-12-06T00:08:25.737Z"
-  },
-  {
-    "id_mensaje": 4,
-    "id_conversacion": 2,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 4,
-    "contenido": "Hola, me gustaría obtener más información.",
-    "creado_en": "2025-12-06T00:24:56.341Z"
-  },
-  {
-    "id_mensaje": 5,
-    "id_conversacion": 3,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 4,
-    "contenido": "Hola, me gustaría obtener más información.",
-    "creado_en": "2025-12-06T00:25:16.443Z"
-  },
-  {
-    "id_mensaje": 6,
-    "id_conversacion": 4,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 4,
-    "contenido": "Hola, me gustaría obtener más información.",
-    "creado_en": "2025-12-06T01:54:08.837Z"
   },
   {
     "id_mensaje": 7,
     "id_conversacion": 1,
     "emisor_tipo": "CLIENTE",
     "emisor_id": 2,
-    "contenido": "aaaa",
+    "contenido": "Quisiera agendar una auditoría.",
     "creado_en": "2025-12-06T07:09:02.691Z"
+  },
+  {
+    "id_mensaje": 8,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "hola",
+    "creado_en": "2025-12-06T22:02:19.448Z"
+  },
+  {
+    "id_mensaje": 9,
+    "id_conversacion": 1,
+    "emisor_tipo": "SUPERVISOR",
+    "emisor_id": 1,
+    "contenido": "buena respuesta",
+    "creado_en": "2025-12-06T22:03:06.461Z"
+  },
+  {
+    "id_mensaje": 10,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaa",
+    "creado_en": "2025-12-06T22:03:31.942Z"
+  },
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aa",
+    "creado_en": "2025-12-06T22:03:32.871Z"
+  },
+  {
+    "id_mensaje": 11,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaa",
+    "creado_en": "2025-12-06T22:03:32.920Z"
+  },
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "a",
+    "creado_en": "2025-12-06T22:03:33.846Z"
+  },
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aa",
+    "creado_en": "2025-12-06T22:03:33.914Z"
+  },
+  {
+    "id_mensaje": 12,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "a",
+    "creado_en": "2025-12-06T22:03:34.131Z"
+  },
+  {
+    "id_mensaje": 13,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "a",
+    "creado_en": "2025-12-06T22:03:35.095Z"
+  },
+  {
+    "id_mensaje": 14,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaaa",
+    "creado_en": "2025-12-06T22:03:35.129Z"
+  },
+  {
+    "id_mensaje": 15,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaaaa",
+    "creado_en": "2025-12-06T22:03:35.184Z"
+  },
+  {
+    "id_mensaje": 16,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "a",
+    "creado_en": "2025-12-06T22:03:35.439Z"
+  },
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaa",
+    "creado_en": "2025-12-06T22:03:36.596Z"
+  },
+  {
+    "id_mensaje": 17,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "aaaaa",
+    "creado_en": "2025-12-06T22:03:36.651Z"
+  },
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "a",
+    "creado_en": "2025-12-06T22:03:38.069Z"
+  },
+  {
+    "id_mensaje": 18,
+    "id_conversacion": 1,
+    "emisor_tipo": "AUDITOR",
+    "emisor_id": 3,
+    "contenido": "buenas tardes",
+    "creado_en": "2025-12-06T22:04:29.025Z"
+  },
+  {
+    "id_mensaje": 19,
+    "id_conversacion": 1,
+    "emisor_tipo": "AUDITOR",
+    "emisor_id": 3,
+    "contenido": "hola",
+    "creado_en": "2025-12-06T22:18:58.513Z"
   }
 ]

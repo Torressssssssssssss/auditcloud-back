@@ -3,32 +3,9 @@
     "id_conversacion": 1,
     "id_cliente": 2,
     "id_empresa_auditora": 1,
-    "asunto": "Consulta",
+    "asunto": "Consulta General",
     "creado_en": "2025-12-05T22:05:29.007Z",
-    "activo": true
-  },
-  {
-    "id_conversacion": 2,
-    "id_cliente": 4,
-    "id_empresa_auditora": 1,
-    "asunto": "Consulta",
-    "creado_en": "2025-12-06T00:24:56.339Z",
-    "activo": true
-  },
-  {
-    "id_conversacion": 3,
-    "id_cliente": 4,
-    "id_empresa_auditora": 1,
-    "asunto": "Consulta",
-    "creado_en": "2025-12-06T00:25:16.442Z",
-    "activo": true
-  },
-  {
-    "id_conversacion": 4,
-    "id_cliente": 4,
-    "id_empresa_auditora": 1,
-    "asunto": "Consulta",
-    "creado_en": "2025-12-06T01:54:08.835Z",
+    "ultimo_mensaje_fecha": "2025-12-06T22:18:58.513Z",
     "activo": true
   }
 ]

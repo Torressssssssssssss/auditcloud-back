@@ -467,173 +467,104 @@ router.post('/auditorias/:idAuditoria/modulos', authenticate, authorize([1]), as
   res.status(201).json({ message: 'Módulo asociado a auditoría', auditoria_modulo: nuevo });
 });
 
-// GET /api/supervisor/conversaciones/:idEmpresa
-// Obtener conversaciones de la empresa auditora
-router.get('/conversaciones/:idEmpresa', authenticate, authorize([1]), async (req, res) => {
-  try {
-    const idEmpresa = Number(req.params.idEmpresa);
-    const idUsuario = req.user.id_usuario;
 
+router.get('/conversaciones', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = req.user.id_empresa;
+    
     const conversaciones = await readJson('conversaciones.json');
     const mensajes = await readJson('mensajes.json');
-    const empresas = await readJson('empresas.json');
     const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
 
-    // Verificar que el supervisor pertenece a esa empresa
-    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
-    if (!usuario || usuario.id_empresa !== idEmpresa) {
-      return res.status(403).json({ message: 'No tienes permisos para ver estas conversaciones' });
-    }
+    // 1. Filtrar conversaciones de la empresa
+    const misConversaciones = conversaciones.filter(c => c.id_empresa_auditora === idEmpresa && c.activo);
 
-    const conversacionesEmpresa = conversaciones
-      .filter(c => c.id_empresa_auditora === idEmpresa && c.activo)
-      .map(conversacion => {
-        // Obtener último mensaje
-        const ultimosMensajes = mensajes
-          .filter(m => m.id_conversacion === conversacion.id_conversacion)
-          .sort((a, b) => new Date(b.creado_en) - new Date(a.creado_en));
-        
-        const ultimoMensaje = ultimosMensajes.length > 0 ? ultimosMensajes[0] : null;
+    // 2. Enriquecer datos
+    const listaFinal = misConversaciones.map(conv => {
+      // Último mensaje
+      const msgs = mensajes.filter(m => m.id_conversacion === conv.id_conversacion);
+      const ultimoMensaje = msgs.length > 0 ? msgs[msgs.length - 1] : null;
 
-        // Obtener datos del cliente
-        const cliente = usuarios.find(u => u.id_usuario === conversacion.id_cliente);
-        const empresaCliente = empresas.find(e => e.id_empresa === cliente?.id_empresa);
+      // Datos del Cliente (Usuario + Empresa)
+      const clienteUser = usuarios.find(u => u.id_usuario === conv.id_cliente);
+      const empresaCliente = clienteUser ? empresas.find(e => e.id_empresa === clienteUser.id_empresa) : null;
 
-        return {
-          id_conversacion: conversacion.id_conversacion,
-          id_cliente: conversacion.id_cliente,
-          id_empresa_auditora: conversacion.id_empresa_auditora,
-          asunto: conversacion.asunto,
-          fecha_creacion: conversacion.creado_en,
-          cliente: cliente ? {
-            id_usuario: cliente.id_usuario,
-            nombre: cliente.nombre,
-            correo: cliente.correo
-          } : null,
-          empresa_cliente: empresaCliente ? {
-            id_empresa: empresaCliente.id_empresa,
-            nombre: empresaCliente.nombre
-          } : null,
-          ultimo_mensaje: ultimoMensaje ? {
-            id_mensaje: ultimoMensaje.id_mensaje,
-            contenido: ultimoMensaje.contenido,
-            fecha_envio: ultimoMensaje.creado_en,
-            id_remitente: ultimoMensaje.emisor_id,
-            tipo_remitente: ultimoMensaje.emisor_tipo
-          } : null
-        };
-      })
-      .sort((a, b) => {
-        // Ordenar por fecha del último mensaje (más reciente primero)
-        if (!a.ultimo_mensaje && !b.ultimo_mensaje) return 0;
-        if (!a.ultimo_mensaje) return 1;
-        if (!b.ultimo_mensaje) return -1;
-        return new Date(b.ultimo_mensaje.fecha_envio) - new Date(a.ultimo_mensaje.fecha_envio);
-      });
+      return {
+        ...conv,
+        cliente: {
+          id_usuario: conv.id_cliente,
+          nombre: clienteUser?.nombre || 'Usuario',
+          nombre_empresa: empresaCliente?.nombre || 'Empresa Cliente',
+          // Enviamos el ID de la empresa cliente para pre-llenar el formulario de pago si es necesario
+          id_empresa: empresaCliente?.id_empresa 
+        },
+        ultimo_mensaje: ultimoMensaje
+      };
+    });
 
-    res.json(conversacionesEmpresa);
+    // 3. Ordenar
+    listaFinal.sort((a, b) => {
+      const fechaA = a.ultimo_mensaje ? new Date(a.ultimo_mensaje.creado_en) : new Date(a.creado_en);
+      const fechaB = b.ultimo_mensaje ? new Date(b.ultimo_mensaje.creado_en) : new Date(b.creado_en);
+      return fechaB - fechaA;
+    });
+
+    res.json(listaFinal);
   } catch (error) {
-    console.error('Error al obtener conversaciones:', error);
-    res.status(500).json({ message: error.message || 'Error al obtener conversaciones' });
+    console.error(error);
+    res.status(500).json({ message: 'Error cargando conversaciones' });
   }
 });
 
 // GET /api/supervisor/mensajes/:idConversacion
-// Obtener mensajes de una conversación específica
 router.get('/mensajes/:idConversacion', authenticate, authorize([1]), async (req, res) => {
-  try {
-    const idConversacion = Number(req.params.idConversacion);
-    const idUsuario = req.user.id_usuario;
+  const idConversacion = Number(req.params.idConversacion);
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
 
-    const conversaciones = await readJson('conversaciones.json');
-    const mensajes = await readJson('mensajes.json');
-    const usuarios = await readJson('usuarios.json');
-
-    const conversacion = conversaciones.find(c => c.id_conversacion === idConversacion && c.activo);
-    if (!conversacion) {
-      return res.status(404).json({ message: 'Conversación no encontrada' });
-    }
-
-    // Verificar que el supervisor pertenece a la empresa auditora de esta conversación
-    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
-    if (!usuario || usuario.id_empresa !== conversacion.id_empresa_auditora) {
-      return res.status(403).json({ message: 'No tienes permisos para ver esta conversación' });
-    }
-
-    const mensajesConversacion = mensajes
-      .filter(m => m.id_conversacion === idConversacion)
-      .sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
-
-    res.json({
-      id_conversacion: conversacion.id_conversacion,
-      id_cliente: conversacion.id_cliente,
-      id_empresa_auditora: conversacion.id_empresa_auditora,
-      asunto: conversacion.asunto,
-      creado_en: conversacion.creado_en,
-      mensajes: mensajesConversacion.map(m => ({
-        id_mensaje: m.id_mensaje,
-        id_remitente: m.emisor_id,
-        tipo_remitente: m.emisor_tipo,
-        contenido: m.contenido,
-        fecha_envio: m.creado_en
-      }))
-    });
-  } catch (error) {
-    console.error('Error al obtener mensajes:', error);
-    res.status(500).json({ message: error.message || 'Error al obtener mensajes' });
+  const conversacion = conversaciones.find(c => c.id_conversacion === idConversacion);
+  if (!conversacion || conversacion.id_empresa_auditora !== req.user.id_empresa) {
+    return res.status(403).json({ message: 'No tienes permiso' });
   }
+  
+  const historial = mensajes.filter(m => m.id_conversacion === idConversacion);
+  historial.sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+  res.json(historial);
 });
 
 // POST /api/supervisor/mensajes
-// Enviar mensaje desde el supervisor
 router.post('/mensajes', authenticate, authorize([1]), async (req, res) => {
-  try {
-    const { id_conversacion, contenido } = req.body;
-    const idUsuario = req.user.id_usuario;
+  const { id_conversacion, contenido } = req.body;
+  
+  if (!id_conversacion || !contenido) return res.status(400).json({message: 'Faltan datos'});
 
-    if (!id_conversacion || !contenido) {
-      return res.status(400).json({ message: 'id_conversacion y contenido son obligatorios' });
-    }
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
 
-    const conversaciones = await readJson('conversaciones.json');
-    const mensajes = await readJson('mensajes.json');
-    const usuarios = await readJson('usuarios.json');
-
-    const conversacion = conversaciones.find(c => c.id_conversacion === Number(id_conversacion) && c.activo);
-    if (!conversacion) {
-      return res.status(404).json({ message: 'Conversación no encontrada' });
-    }
-
-    // Verificar que el supervisor pertenece a la empresa auditora de esta conversación
-    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 1 && u.activo);
-    if (!usuario || usuario.id_empresa !== conversacion.id_empresa_auditora) {
-      return res.status(403).json({ message: 'No tienes permisos para enviar mensajes en esta conversación' });
-    }
-
-    // Crear el mensaje
-    const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
-    const nuevoMensaje = {
-      id_mensaje: idMensaje,
-      id_conversacion: Number(id_conversacion),
-      emisor_tipo: 'SUPERVISOR',
-      emisor_id: idUsuario,
-      contenido: contenido,
-      creado_en: new Date().toISOString()
-    };
-    mensajes.push(nuevoMensaje);
-    await writeJson('mensajes.json', mensajes);
-
-    res.status(201).json({
-      id_mensaje: nuevoMensaje.id_mensaje,
-      id_conversacion: nuevoMensaje.id_conversacion,
-      id_remitente: nuevoMensaje.emisor_id,
-      contenido: nuevoMensaje.contenido,
-      fecha_envio: nuevoMensaje.creado_en
-    });
-  } catch (error) {
-    console.error('Error al enviar mensaje:', error);
-    res.status(500).json({ message: error.message || 'Error al enviar mensaje' });
+  const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+  if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
+    return res.status(403).json({ message: 'Conversación no válida' });
   }
+
+  const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+  const nuevoMensaje = {
+    id_mensaje: idMensaje,
+    id_conversacion: Number(id_conversacion),
+    emisor_tipo: 'SUPERVISOR', // Identificador clave
+    emisor_id: req.user.id_usuario,
+    contenido: contenido,
+    creado_en: new Date().toISOString()
+  };
+
+  mensajes.push(nuevoMensaje);
+  await writeJson('mensajes.json', mensajes);
+
+  conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+  await writeJson('conversaciones.json', conversaciones);
+
+  res.status(201).json(nuevoMensaje);
 });
 
 // GET /api/supervisor/auditorias/:idEmpresa
@@ -740,6 +671,66 @@ router.get('/auditorias/:idAuditoria/participantes', authenticate, authorize([1]
   }).filter(u => u.id_usuario); // Eliminar nulos si hubiera inconsistencias
 
   res.json(resultado);
+});
+
+// GET /api/supervisor/clientes-con-auditorias
+// Obtiene todas las EMPRESAS que tienen o han tenido auditorías con nosotros
+router.get('/clientes-con-auditorias', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresaAuditora = req.user.id_empresa;
+
+    const auditorias = await readJson('auditorias.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
+
+    // 1. Obtener todas las auditorías de mi empresa
+    const misAuditorias = auditorias.filter(a => a.id_empresa_auditora === idEmpresaAuditora);
+
+    // 2. Extraer IDs únicos de usuarios clientes de esas auditorías
+    // Usamos Set para evitar duplicados de usuarios
+    const idsUsuariosClientes = [...new Set(misAuditorias.map(a => a.id_cliente))];
+
+    // 3. Buscar las empresas a las que pertenecen esos usuarios
+    const empresasMap = new Map(); // Usamos Map para evitar empresas duplicadas por ID
+
+    idsUsuariosClientes.forEach(idUsuario => {
+      const usuario = usuarios.find(u => u.id_usuario === idUsuario);
+      
+      if (usuario && usuario.id_empresa) {
+        // Verificar si ya agregamos esta empresa al mapa
+        if (!empresasMap.has(usuario.id_empresa)) {
+          const empresa = empresas.find(e => e.id_empresa === usuario.id_empresa);
+          
+          if (empresa) {
+            // Calculamos métricas extra si quieres mostrarlas en el dashboard
+            const totalAuditoriasEmpresa = misAuditorias.filter(a => {
+                const u = usuarios.find(usr => usr.id_usuario === a.id_cliente);
+                return u && u.id_empresa === empresa.id_empresa;
+            }).length;
+
+            empresasMap.set(usuario.id_empresa, {
+              id_empresa: empresa.id_empresa,
+              nombre: empresa.nombre,
+              ciudad: empresa.ciudad,
+              pais: empresa.pais,
+              contacto: usuario.nombre, // El contacto es el usuario que hizo la auditoría
+              total_auditorias: totalAuditoriasEmpresa,
+              activo: empresa.activo
+            });
+          }
+        }
+      }
+    });
+
+    // Convertir el Map a Array para la respuesta
+    const resultado = Array.from(empresasMap.values());
+
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('Error al obtener clientes:', error);
+    res.status(500).json({ message: 'Error interno al cargar clientes' });
+  }
 });
 
 module.exports = router;
