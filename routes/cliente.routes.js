@@ -210,36 +210,44 @@ router.get('/solicitudes-pago/:idCliente', authenticate, authorize([3]), async (
   const solicitudes = await readJson('solicitudes_pago.json');
   res.json(solicitudes.filter(s => s.id_cliente === idCliente));
 });
+// POST /api/auditor/solicitudes-pago
+// El AUDITOR (Rol 2) genera una solicitud de cobro para un cliente
+router.post('/solicitudes-pago', authenticate, authorize([2]), async (req, res) => {
+  const { id_cliente, monto, concepto } = req.body;
+  
+  // El ID de la empresa sale del usuario auditor logueado (req.user)
+  // No necesitamos pedirlo en el body por seguridad
+  const id_empresa_auditora = req.user.id_empresa;
 
-// POST /api/cliente/solicitudes-pago
-// El cliente puede solicitar un pago (por ejemplo anticipo)
-router.post('/solicitudes-pago', authenticate, authorize([3]), async (req, res) => {
-  const { id_cliente, id_empresa_auditora, monto, concepto } = req.body;
-  if (!id_cliente || !id_empresa_auditora || !monto || !concepto) {
-    return res.status(400).json({ message: 'id_cliente, id_empresa_auditora, monto y concepto son obligatorios' });
+  if (!id_cliente || !monto || !concepto) {
+    return res.status(400).json({ message: 'id_cliente, monto y concepto son obligatorios' });
   }
 
   const solicitudes = await readJson('solicitudes_pago.json');
-  const empresas = await readJson('empresas.json');
   const usuarios = await readJson('usuarios.json');
+
+  // Validar que el cliente exista
   const clienteValido = usuarios.some(u => u.id_usuario === Number(id_cliente) && u.id_rol === 3 && u.activo);
-  const empresaValida = empresas.some(e => e.id_empresa === Number(id_empresa_auditora) && e.activo);
   if (!clienteValido) return res.status(404).json({ message: 'Cliente no encontrado o inactivo' });
-  if (!empresaValida) return res.status(404).json({ message: 'Empresa auditora no encontrada o inactiva' });
+
   const idSolicitud = await getNextId('solicitudes_pago.json', 'id_solicitud');
+  
   const nueva = {
     id_solicitud: idSolicitud,
-    id_empresa: Number(id_empresa_auditora), // id_empresa en solicitudes_pago se refiere a la empresa auditora
-    id_empresa_auditora: Number(id_empresa_auditora), // Mantener ambos para compatibilidad
+    id_empresa: Number(id_empresa_auditora),
+    id_empresa_auditora: Number(id_empresa_auditora),
     id_cliente: Number(id_cliente),
     monto: Number(monto),
     concepto,
-    id_estado: 1,
-    creado_en: new Date().toISOString()
+    id_estado: 1, // 1 = PENDIENTE DE PAGO
+    creado_en: new Date().toISOString(),
+    creado_por_auditor: req.user.id_usuario // Auditoría interna: saber quién cobró
   };
+
   solicitudes.push(nueva);
   await writeJson('solicitudes_pago.json', solicitudes);
-  res.status(201).json({ message: 'Solicitud de pago creada por cliente', solicitud: nueva });
+
+  res.status(201).json({ message: 'Solicitud de cobro creada', solicitud: nueva });
 });
 
 // GET /api/cliente/empresas-auditoras

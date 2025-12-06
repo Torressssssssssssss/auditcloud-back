@@ -1,3 +1,5 @@
+require('dotenv').config(); 
+
 const express = require('express');
 const cors = require('cors');
 
@@ -5,6 +7,7 @@ const authRoutes = require('./routes/auth.routes');
 const supervisorRoutes = require('./routes/supervisor.routes');
 const clienteRoutes = require('./routes/cliente.routes');
 const auditorRoutes = require('./routes/auditor.routes');
+const paypalRoutes = require('./routes/paypal.routes');
 
 const app = express();
 const PORT = 3000;
@@ -18,6 +21,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/supervisor', supervisorRoutes);
 app.use('/api/cliente', clienteRoutes);
 app.use('/api/auditor', auditorRoutes);
+app.use('/api/paypal', paypalRoutes);
 
 // Salud
 app.get('/', (req, res) => {

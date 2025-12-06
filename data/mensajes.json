@@ -14,5 +14,37 @@
     "emisor_id": 1,
     "contenido": "Hola buen dia.",
     "creado_en": "2025-12-05T22:20:22.169Z"
+  },
+  {
+    "id_mensaje": 3,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "hola",
+    "creado_en": "2025-12-06T00:08:25.737Z"
+  },
+  {
+    "id_mensaje": 4,
+    "id_conversacion": 2,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 4,
+    "contenido": "Hola, me gustaría obtener más información.",
+    "creado_en": "2025-12-06T00:24:56.341Z"
+  },
+  {
+    "id_mensaje": 5,
+    "id_conversacion": 3,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 4,
+    "contenido": "Hola, me gustaría obtener más información.",
+    "creado_en": "2025-12-06T00:25:16.443Z"
+  },
+  {
+    "id_mensaje": 6,
+    "id_conversacion": 4,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 4,
+    "contenido": "Hola, me gustaría obtener más información.",
+    "creado_en": "2025-12-06T01:54:08.837Z"
   }
 ]

@@ -104,4 +104,69 @@ router.delete('/evidencias/:idEvidencia', authenticate, authorize([2]), async (r
   res.json({ message: 'Evidencia eliminada' });
 });
 
+// --- NUEVA RUTA PARA SOLICITUDES DE PAGO ---
+// POST /api/auditor/solicitudes-pago
+// Permite al auditor crear una solicitud de cobro a un cliente
+// POST /api/auditor/solicitudes-pago
+router.post('/solicitudes-pago', authenticate, authorize([2]), async (req, res) => {
+  // 1. Recibimos id_empresa en lugar de id_cliente
+  const { id_empresa, monto, concepto } = req.body;
+  
+  const id_empresa_auditora = req.user.id_empresa;
+
+  if (!id_empresa || !monto || !concepto) {
+    return res.status(400).json({ message: 'id_empresa, monto y concepto son obligatorios' });
+  }
+
+  const solicitudes = await readJson('solicitudes_pago.json');
+  const empresas = await readJson('empresas.json');
+  const usuarios = await readJson('usuarios.json');
+
+  // 2. Validamos que la EMPRESA exista y sea TIPO CLIENTE (id_tipo_empresa: 2)
+  const empresaObjetivo = empresas.find(e => e.id_empresa === Number(id_empresa) && e.activo);
+  
+  if (!empresaObjetivo) {
+    return res.status(404).json({ message: 'Empresa no encontrada' });
+  }
+  if (empresaObjetivo.id_tipo_empresa !== 2) {
+    return res.status(400).json({ message: 'El ID proporcionado no es una empresa Cliente (es auditora u otro tipo).' });
+  }
+
+  // 3. (Truco de compatibilidad) Buscamos el usuario principal de esa empresa
+  // Necesitamos un id_cliente para que aparezca en el Dashboard del usuario
+  const usuarioPrincipal = usuarios.find(u => u.id_empresa === Number(id_empresa) && u.id_rol === 3 && u.activo);
+
+  if (!usuarioPrincipal) {
+    return res.status(400).json({ 
+      message: 'La empresa existe, pero no tiene ningún usuario administrador registrado para recibir el cobro.' 
+    });
+  }
+
+  const idSolicitud = await getNextId('solicitudes_pago.json', 'id_solicitud');
+  
+  const nueva = {
+    id_solicitud: idSolicitud,
+    id_empresa: Number(id_empresa_auditora),
+    id_empresa_auditora: Number(id_empresa_auditora),
+    
+    // Guardamos ambos datos: a qué empresa se cobra y a qué usuario se le notifica
+    id_empresa_cliente: Number(id_empresa), 
+    id_cliente: usuarioPrincipal.id_usuario, // Mantenemos esto para que funcione tu dashboard actual
+    
+    monto: Number(monto),
+    concepto,
+    id_estado: 1,
+    creado_en: new Date().toISOString(),
+    creado_por_auditor: req.user.id_usuario
+  };
+
+  solicitudes.push(nueva);
+  await writeJson('solicitudes_pago.json', solicitudes);
+
+  res.status(201).json({ 
+    message: `Solicitud creada para la empresa ${empresaObjetivo.nombre}`, 
+    solicitud: nueva 
+  });
+});
+
 module.exports = router;

@@ -28,5 +28,15 @@
     "id_rol": 2,
     "activo": true,
     "creado_en": "2025-12-05T23:50:58.585Z"
+  },
+  {
+    "id_usuario": 4,
+    "id_empresa": 3,
+    "nombre": "Rene De Anda",
+    "correo": "renerosendo8@gmail.com",
+    "password_hash": "$2a$10$C6wbeRaC16dAnKZIjhVUveSoHADkTHMUXW5l7vHEkXxJerKflZVBy",
+    "id_rol": 3,
+    "activo": true,
+    "creado_en": "2025-12-06T00:24:22.034Z"
   }
 ]

@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id_solicitud": 1,
+    "id_empresa": 1,
+    "id_empresa_auditora": 1,
+    "id_empresa_cliente": 2,
+    "id_cliente": 2,
+    "monto": 1500,
+    "concepto": "prueba",
+    "id_estado": 2,
+    "creado_en": "2025-12-06T04:01:28.690Z",
+    "creado_por_auditor": 3,
+    "pagada_en": "2025-12-06T05:22:04.004Z",
+    "paypal_order_id": "8RH07472SB909141J"
+  }
+]

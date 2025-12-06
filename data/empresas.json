@@ -28,5 +28,20 @@
     "contacto_correo": "angel@towers.com",
     "contacto_telefono": null,
     "activo": true
+  },
+  {
+    "id_empresa": 3,
+    "id_tipo_empresa": 2,
+    "nombre": "Auditora Demo S.A. de C.V.",
+    "rfc": null,
+    "giro": null,
+    "direccion": null,
+    "ciudad": "Aguascalientes",
+    "estado": "Aguascalientes",
+    "pais": "México",
+    "contacto_nombre": "Rene De Anda",
+    "contacto_correo": "renerosendo8@gmail.com",
+    "contacto_telefono": null,
+    "activo": true
   }
 ]
