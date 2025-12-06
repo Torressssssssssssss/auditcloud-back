@@ -1,6 +1,7 @@
 require('dotenv').config(); 
 
 const express = require('express');
+const path = require('path'); // Importar path
 const cors = require('cors');
 
 const authRoutes = require('./routes/auth.routes');
@@ -22,6 +23,8 @@ app.use('/api/supervisor', supervisorRoutes);
 app.use('/api/cliente', clienteRoutes);
 app.use('/api/auditor', auditorRoutes);
 app.use('/api/paypal', paypalRoutes);
+// Servir archivos subidos desde `back/data/uploads` en la ruta pública /uploads
+app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
 
 // Salud
 app.get('/', (req, res) => {

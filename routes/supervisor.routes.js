@@ -717,4 +717,29 @@ router.get('/auditorias/:idEmpresa', authenticate, authorize([1]), async (req, r
   }
 });
 
+// GET /api/supervisor/auditorias/:idAuditoria/participantes
+// Lista los auditores asignados a una auditoría específica
+router.get('/auditorias/:idAuditoria/participantes', authenticate, authorize([1]), async (req, res) => {
+  const idAuditoria = Number(req.params.idAuditoria);
+  
+  const participantes = await readJson('auditoria_participantes.json');
+  const usuarios = await readJson('usuarios.json');
+
+  // 1. Obtener IDs de los auditores en esta auditoría
+  const asignaciones = participantes.filter(p => p.id_auditoria === idAuditoria);
+  
+  // 2. Cruzar con usuarios para obtener nombres y correos
+  const resultado = asignaciones.map(a => {
+    const auditor = usuarios.find(u => u.id_usuario === a.id_auditor);
+    return {
+      id_usuario: auditor?.id_usuario,
+      nombre: auditor?.nombre,
+      correo: auditor?.correo,
+      asignado_en: a.asignado_en
+    };
+  }).filter(u => u.id_usuario); // Eliminar nulos si hubiera inconsistencias
+
+  res.json(resultado);
+});
+
 module.exports = router;

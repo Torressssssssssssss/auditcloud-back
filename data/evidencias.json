@@ -1,1 +1,35 @@
-[]
+[
+  {
+    "id_evidencia": 1,
+    "id_auditoria": 1,
+    "id_modulo": 1,
+    "id_auditor": 3,
+    "tipo": "DOC",
+    "descripcion": "zdfvzfvzvfz",
+    "url": "http://localhost:3000/uploads/1765045508041-47933375.pdf",
+    "nombre_archivo": "Foto RenÃ© De Anda.pdf",
+    "creado_en": "2025-12-06T18:25:08.148Z"
+  },
+  {
+    "id_evidencia": 2,
+    "id_auditoria": 1,
+    "id_modulo": 1,
+    "id_auditor": 3,
+    "tipo": "FOTO",
+    "descripcion": "logho de prueba",
+    "url": "http://localhost:3000/uploads/1765050091780-120075284.png",
+    "nombre_archivo": "axolingo.png",
+    "creado_en": "2025-12-06T19:41:31.794Z"
+  },
+  {
+    "id_evidencia": 3,
+    "id_auditoria": 1,
+    "id_modulo": 2,
+    "id_auditor": 3,
+    "tipo": "DOC",
+    "descripcion": "tortuga roja",
+    "url": "http://localhost:3000/uploads/1765050520530-320799980.png",
+    "nombre_archivo": "tortuga_roja.png",
+    "creado_en": "2025-12-06T19:48:40.901Z"
+  }
+]
