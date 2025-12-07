@@ -62,5 +62,13 @@
     "emisor_id": 2,
     "contenido": "hola",
     "creado_en": "2025-12-06T23:49:55.800Z"
+  },
+  {
+    "id_mensaje": 22,
+    "id_conversacion": 1,
+    "emisor_tipo": "SUPERVISOR",
+    "emisor_id": 1,
+    "contenido": "Hola",
+    "creado_en": "2025-12-07T01:27:43.285Z"
   }
 ]
