@@ -5,27 +5,14 @@ const path = require('path');
 const fs = require('fs');
 const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize } = require('../utils/auth');
+const { uploadFileToFirebase } = require('../utils/firebaseStorage');
 
 // ==========================================
-// 1. CONFIGURACIÓN DE MULTER (Subida de Archivos)
+// 1. CONFIGURACIÓN DE MULTER (Memory Storage para Firebase)
 // ==========================================
 
-// Asegurar que la carpeta uploads exista dentro de `back/data/uploads`
-const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
-if (!fs.existsSync(uploadDir)){
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir); 
-  },
-  filename: function (req, file, cb) {
-    // Nombre único: timestamp + random + extensión original
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
+// Usar memory storage para obtener el buffer y subirlo a Firebase
+const storage = multer.memoryStorage();
 
 // Filtro para seguridad (Solo imágenes y PDFs)
 const fileFilter = (req, file, cb) => {
@@ -39,7 +26,7 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Límite de 5MB
+  limits: { fileSize: 10 * 1024 * 1024 }, // Límite de 10MB (Firebase permite más)
   fileFilter: fileFilter
 });
 
@@ -151,11 +138,27 @@ router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'
       return res.status(400).json({ message: 'Todos los campos son obligatorios' });
     }
 
+    // Subir archivo a Firebase Storage
+    let fileUrl, filePath;
+    try {
+      const uploadResult = await uploadFileToFirebase(
+        req.file.buffer,
+        req.file.originalname,
+        'evidencias',
+        req.file.mimetype
+      );
+      fileUrl = uploadResult.url;
+      filePath = uploadResult.path;
+    } catch (firebaseError) {
+      console.error('Error subiendo archivo a Firebase:', firebaseError);
+      return res.status(500).json({ 
+        message: 'Error al subir el archivo a Firebase Storage',
+        error: firebaseError.message 
+      });
+    }
+
     const evidencias = await readJson('evidencias.json');
     const idEvidencia = await getNextId('evidencias.json', 'id_evidencia');
-
-    // Construir la URL pública
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
 
     const nueva = {
       id_evidencia: idEvidencia,
@@ -165,6 +168,7 @@ router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'
       tipo,
       descripcion,
       url: fileUrl,
+      firebase_path: filePath, // Guardar la ruta de Firebase por si necesitamos eliminar el archivo después
       nombre_archivo: req.file.originalname,
       creado_en: new Date().toISOString()
     };

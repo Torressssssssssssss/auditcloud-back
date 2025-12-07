@@ -38,5 +38,18 @@
     "id_rol": 3,
     "activo": true,
     "creado_en": "2025-12-06T00:24:22.034Z"
+  },
+  {
+    "id_usuario": 5,
+    "id_empresa": 4,
+    "nombre": "Angel Torres",
+    "correo": "angel.tr.0705@gmail.com",
+    "password_hash": null,
+    "id_rol": 3,
+    "activo": true,
+    "google_id": "103318433595875255294",
+    "foto_url": null,
+    "creado_en": "2025-12-07T02:55:39.921Z",
+    "login_google": true
   }
 ]
