@@ -13,50 +13,5 @@
     "contacto_correo": "supervisor@auditora-demo.com",
     "contacto_telefono": "4490000000",
     "activo": true
-  },
-  {
-    "id_empresa": 2,
-    "id_tipo_empresa": 2,
-    "nombre": "TOWERS",
-    "rfc": null,
-    "giro": null,
-    "direccion": null,
-    "ciudad": "Aguascalientes",
-    "estado": "Aguascalientes",
-    "pais": "México",
-    "contacto_nombre": "Angel Torres",
-    "contacto_correo": "angel@towers.com",
-    "contacto_telefono": null,
-    "activo": true
-  },
-  {
-    "id_empresa": 3,
-    "id_tipo_empresa": 2,
-    "nombre": "Auditora Demo S.A. de C.V.",
-    "rfc": null,
-    "giro": null,
-    "direccion": null,
-    "ciudad": "Aguascalientes",
-    "estado": "Aguascalientes",
-    "pais": "México",
-    "contacto_nombre": "Rene De Anda",
-    "contacto_correo": "renerosendo8@gmail.com",
-    "contacto_telefono": null,
-    "activo": true
-  },
-  {
-    "id_empresa": 4,
-    "id_tipo_empresa": 2,
-    "nombre": "Angel Torres",
-    "rfc": null,
-    "giro": null,
-    "direccion": null,
-    "ciudad": null,
-    "estado": null,
-    "pais": "México",
-    "contacto_nombre": "Angel Torres",
-    "contacto_correo": "angel.tr.0705@gmail.com",
-    "contacto_telefono": null,
-    "activo": true
   }
 ]

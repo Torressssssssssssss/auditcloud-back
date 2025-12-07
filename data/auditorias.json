@@ -1,13 +1,1 @@
-[
-  {
-    "id_auditoria": 1,
-    "id_empresa_auditora": 1,
-    "id_cliente": 2,
-    "id_solicitud_pago": 1,
-    "id_estado": 3,
-    "monto": 1500,
-    "creada_en": "2025-12-06T05:22:04.407Z",
-    "estado_actualizado_en": "2025-12-07T20:12:38.384Z",
-    "objetivo": "Prueba"
-  }
-]
+[]

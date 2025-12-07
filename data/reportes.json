@@ -1,13 +1,1 @@
-[
-  {
-    "id_reporte": 1,
-    "id_auditoria": 1,
-    "nombre": "Reporte Final de Auditoría",
-    "tipo": "FINAL",
-    "observaciones": "final final",
-    "url": "http://localhost:3000/uploads/1765138358263-88alkw.pdf",
-    "nombre_archivo": "Foto RenÃ© De Anda.pdf",
-    "creado_por": 3,
-    "fecha_creacion": "2025-12-07T20:12:38.383Z"
-  }
-]
+[]
