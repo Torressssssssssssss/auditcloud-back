@@ -9,7 +9,7 @@ const supervisorRoutes = require('./routes/supervisor.routes');
 const clienteRoutes = require('./routes/cliente.routes');
 const auditorRoutes = require('./routes/auditor.routes');
 const paypalRoutes = require('./routes/paypal.routes');
-
+const timelineRoutes = require('./routes/timeline.routes');
 const app = express();
 const PORT = 3000;
 
@@ -25,6 +25,7 @@ app.use('/api/auditor', auditorRoutes);
 app.use('/api/paypal', paypalRoutes);
 // Servir archivos subidos desde `back/data/uploads` en la ruta pública /uploads
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
+app.use('/api/timeline', timelineRoutes); 
 
 // Salud
 app.get('/', (req, res) => {

@@ -31,5 +31,16 @@
     "url": "http://localhost:3000/uploads/1765050520530-320799980.png",
     "nombre_archivo": "tortuga_roja.png",
     "creado_en": "2025-12-06T19:48:40.901Z"
+  },
+  {
+    "id_evidencia": 4,
+    "id_auditoria": 1,
+    "id_modulo": 2,
+    "id_auditor": 3,
+    "tipo": "COMENTARIO",
+    "descripcion": "Va bonito",
+    "nombre_archivo": null,
+    "url_archivo": null,
+    "creado_en": "2025-12-07T20:03:44.242Z"
   }
 ]

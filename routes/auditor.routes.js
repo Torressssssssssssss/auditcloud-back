@@ -5,14 +5,28 @@ const path = require('path');
 const fs = require('fs');
 const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize } = require('../utils/auth');
-const { uploadFileToFirebase } = require('../utils/firebaseStorage');
 
 // ==========================================
-// 1. CONFIGURACIÓN DE MULTER (Memory Storage para Firebase)
+// 1. CONFIGURACIÓN DE MULTER (Disk Storage)
 // ==========================================
 
-// Usar memory storage para obtener el buffer y subirlo a Firebase
-const storage = multer.memoryStorage();
+// Configurar directorio de uploads
+const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
+fs.mkdirSync(uploadDir, { recursive: true });
+
+// Disk storage - guardar archivos localmente
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const ext = path.extname(file.originalname);
+    const filename = `${timestamp}-${randomStr}${ext}`;
+    cb(null, filename);
+  }
+});
 
 // Filtro para seguridad (Solo imágenes y PDFs)
 const fileFilter = (req, file, cb) => {
@@ -26,7 +40,7 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // Límite de 10MB (Firebase permite más)
+  limits: { fileSize: 10 * 1024 * 1024 }, // Límite de 10MB
   fileFilter: fileFilter
 });
 
@@ -160,35 +174,19 @@ router.patch('/auditorias/:id/objetivo', authenticate, authorize([2]), async (re
 
 // POST /api/auditor/evidencias
 // Sube un archivo y crea el registro de evidencia
+// Si tipo === 'COMENTARIO', no se requiere archivo
 router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
   try {
     const { id_auditoria, id_modulo, tipo, descripcion } = req.body;
     
     // Validaciones
-    if (!req.file) {
-      return res.status(400).json({ message: 'Debes subir un archivo de evidencia (PDF o Imagen)' });
-    }
     if (!id_auditoria || !id_modulo || !tipo || !descripcion) {
-      return res.status(400).json({ message: 'Todos los campos son obligatorios' });
+      return res.status(400).json({ message: 'id_auditoria, id_modulo, tipo y descripcion son obligatorios' });
     }
 
-    // Subir archivo a Firebase Storage
-    let fileUrl, filePath;
-    try {
-      const uploadResult = await uploadFileToFirebase(
-        req.file.buffer,
-        req.file.originalname,
-        'evidencias',
-        req.file.mimetype
-      );
-      fileUrl = uploadResult.url;
-      filePath = uploadResult.path;
-    } catch (firebaseError) {
-      console.error('Error subiendo archivo a Firebase:', firebaseError);
-      return res.status(500).json({ 
-        message: 'Error al subir el archivo a Firebase Storage',
-        error: firebaseError.message 
-      });
+    // Si es comentario, no se requiere archivo. Si no es comentario, sí.
+    if (tipo !== 'COMENTARIO' && !req.file) {
+      return res.status(400).json({ message: 'Debes subir un archivo de evidencia (PDF o Imagen)' });
     }
 
     const evidencias = await readJson('evidencias.json');
@@ -201,9 +199,8 @@ router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'
       id_auditor: req.user.id_usuario,
       tipo,
       descripcion,
-      url: fileUrl,
-      firebase_path: filePath, // Guardar la ruta de Firebase por si necesitamos eliminar el archivo después
-      nombre_archivo: req.file.originalname,
+      nombre_archivo: req.file ? req.file.originalname : null,
+      url_archivo: req.file ? `/uploads/${req.file.filename}` : null,
       creado_en: new Date().toISOString()
     };
 
@@ -526,6 +523,128 @@ router.post('/mensajes', authenticate, authorize([2]), async (req, res) => {
   } catch (error) {
     console.error('Error al enviar mensaje:', error);
     res.status(500).json({ message: error.message || 'Error al enviar mensaje' });
+  }
+});
+
+
+// ==========================================
+// 6. RUTAS DE REPORTES (AUDITOR)
+// ==========================================
+
+router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
+  try {
+    const { id_auditoria, nombre } = req.body;
+
+    // 1. Validaciones
+    if (!req.file) {
+      return res.status(400).json({ message: 'Debes subir el archivo PDF.' });
+    }
+    if (!id_auditoria) {
+      return res.status(400).json({ message: 'Selecciona una auditoría.' });
+    }
+
+    const reportes = await readJson('reportes.json');
+    const auditorias = await readJson('auditorias.json');
+
+    // 2. Verificar Auditoría
+    const idxAudit = auditorias.findIndex(a => a.id_auditoria === Number(id_auditoria));
+    if (idxAudit === -1) {
+      return res.status(404).json({ message: 'Auditoría no encontrada.' });
+    }
+
+    // 3. Guardar Reporte
+    const idReporte = await getNextId('reportes.json', 'id_reporte');
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+    const nuevoReporte = {
+      id_reporte: idReporte,
+      id_auditoria: Number(id_auditoria),
+      nombre: nombre || 'Reporte Final',
+      tipo: 'FINAL',
+      url: fileUrl,
+      nombre_archivo: req.file.originalname,
+      creado_por: req.user.id_usuario,
+      fecha_creacion: new Date().toISOString()
+    };
+
+    reportes.push(nuevoReporte);
+    await writeJson('reportes.json', reportes);
+
+    // 4. CAMBIO DE ESTADO AUTOMÁTICO -> FINALIZADA (3)
+    if (auditorias[idxAudit].id_estado !== 3) {
+      auditorias[idxAudit].id_estado = 3;
+      auditorias[idxAudit].estado_actualizado_en = new Date().toISOString();
+      await writeJson('auditorias.json', auditorias);
+    }
+
+    res.status(201).json({ 
+      message: 'Reporte subido y auditoría finalizada.', 
+      reporte: nuevoReporte 
+    });
+
+  } catch (error) {
+    console.error('Error subiendo reporte:', error);
+    res.status(500).json({ message: 'Error interno.' });
+  }
+});
+
+// POST /api/auditor/reportes
+// Sube el PDF final y FINALIZA la auditoría
+router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
+  try {
+    const { id_auditoria, nombre, observaciones } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Debes subir el archivo PDF del reporte.' });
+    }
+    if (!id_auditoria || !nombre) {
+      return res.status(400).json({ message: 'id_auditoria y nombre del reporte son obligatorios.' });
+    }
+
+    const reportes = await readJson('reportes.json');
+    const auditorias = await readJson('auditorias.json');
+
+    // 1. Verificar la auditoría
+    const idxAudit = auditorias.findIndex(a => a.id_auditoria === Number(id_auditoria));
+    if (idxAudit === -1) {
+      return res.status(404).json({ message: 'Auditoría no encontrada.' });
+    }
+
+    // 2. Guardar el Reporte
+    const idReporte = await getNextId('reportes.json', 'id_reporte');
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+    const nuevoReporte = {
+      id_reporte: idReporte,
+      id_auditoria: Number(id_auditoria),
+      nombre: nombre,
+      tipo: 'FINAL', // Marcamos que es el reporte final
+      observaciones: observaciones || '',
+      url: fileUrl,
+      nombre_archivo: req.file.originalname,
+      creado_por: req.user.id_usuario,
+      fecha_creacion: new Date().toISOString()
+    };
+
+    reportes.push(nuevoReporte);
+    await writeJson('reportes.json', reportes);
+
+    // 3. ACTUALIZAR ESTADO DE AUDITORÍA A "FINALIZADA" (3)
+    // Solo si no estaba ya finalizada
+    if (auditorias[idxAudit].id_estado !== 3) {
+      auditorias[idxAudit].id_estado = 3; 
+      auditorias[idxAudit].estado_actualizado_en = new Date().toISOString();
+      await writeJson('auditorias.json', auditorias);
+    }
+
+    res.status(201).json({ 
+      message: 'Reporte subido y auditoría finalizada correctamente.', 
+      reporte: nuevoReporte 
+    });
+
+  } catch (error) {
+    console.error('Error al subir reporte:', error);
+    res.status(500).json({ message: 'Error interno al procesar el reporte.' });
   }
 });
 

@@ -237,18 +237,53 @@ router.post('/conversaciones', authenticate, authorize([3]), async (req, res) =>
     primer_mensaje: mensajeInicial
   });
 });
-
-// --- Auditorías del cliente ---
-// GET /api/cliente/auditorias/:idCliente
 router.get('/auditorias/:idCliente', authenticate, authorize([3]), async (req, res) => {
-  const idCliente = Number(req.params.idCliente);
-  const page = Number(req.query.page || 1);
-  const limit = Number(req.query.limit || 20);
-  const auditorias = await readJson('auditorias.json');
-  const all = auditorias.filter(a => a.id_cliente === idCliente);
-  const start = (page - 1) * limit;
-  const data = all.slice(start, start + limit);
-  res.json({ total: all.length, page, limit, data });
+  try {
+    const idCliente = Number(req.params.idCliente);
+    
+    // Leemos todas las tablas necesarias
+    const auditorias = await readJson('auditorias.json');
+    const empresas = await readJson('empresas.json');
+    const auditoriaModulos = await readJson('auditoria_modulos.json');
+    
+    // 1. Filtrar auditorías de este cliente
+    const misAuditorias = auditorias.filter(a => a.id_cliente === idCliente);
+
+    // 2. Enriquecer los datos
+    const resultado = misAuditorias.map(audit => {
+      // Buscar nombre de la empresa auditora
+      const empresa = empresas.find(e => e.id_empresa === audit.id_empresa_auditora);
+      
+      // Buscar módulos asignados (Array de IDs)
+      const modulosIds = auditoriaModulos
+        .filter(am => am.id_auditoria === audit.id_auditoria)
+        .map(am => am.id_modulo);
+
+      return {
+        id_auditoria: audit.id_auditoria,
+        id_estado: audit.id_estado, // 1: Creada, 2: En Proceso, 3: Finalizada
+        fecha_creacion: audit.creada_en || audit.fecha_creacion,
+        
+        // Objeto empresa para que funcione el HTML {{ auditoria.empresa?.nombre }}
+        empresa: {
+          id_empresa: empresa?.id_empresa,
+          nombre: empresa?.nombre || 'Empresa Desconocida'
+        },
+        
+        // Array de módulos para que funcione getModulosTexto()
+        modulos: modulosIds 
+      };
+    });
+
+    // Ordenar: Más recientes primero
+    resultado.sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
+
+    res.json(resultado); // Enviamos el array directo (sin paginación compleja por ahora)
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error cargando auditorías' });
+  }
 });
 
 // --- Solicitudes de pago del cliente ---

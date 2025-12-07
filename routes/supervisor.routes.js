@@ -942,4 +942,35 @@ router.post('/reportes', authenticate, authorize([1]), upload.single('archivo'),
   }
 });
 
+// GET /api/supervisor/auditorias/:id/reporte-final
+// Obtiene el reporte final de una auditoría para el supervisor
+router.get('/auditorias/:id/reporte-final', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idAuditoria = Number(req.params.id);
+    const idEmpresa = req.user.id_empresa;
+
+    const reportes = await readJson('reportes.json');
+    const auditorias = await readJson('auditorias.json');
+
+    // 1. Validar que la auditoría pertenezca a la empresa del supervisor
+    const auditoria = auditorias.find(a => a.id_auditoria === idAuditoria);
+    if (!auditoria || auditoria.id_empresa_auditora !== idEmpresa) {
+      return res.status(403).json({ message: 'No tienes permiso sobre esta auditoría' });
+    }
+
+    // 2. Buscar el reporte tipo 'FINAL'
+    const reporte = reportes.find(r => r.id_auditoria === idAuditoria && r.tipo === 'FINAL');
+    
+    if (!reporte) {
+      return res.status(404).json({ message: 'Aún no se ha generado el reporte final' });
+    }
+
+    res.json(reporte);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al obtener reporte final' });
+  }
+});
+
 module.exports = router;
