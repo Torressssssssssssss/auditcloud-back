@@ -26,122 +26,10 @@
   {
     "id_mensaje": 8,
     "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "hola",
-    "creado_en": "2025-12-06T22:02:19.448Z"
-  },
-  {
-    "id_mensaje": 9,
-    "id_conversacion": 1,
     "emisor_tipo": "SUPERVISOR",
     "emisor_id": 1,
-    "contenido": "buena respuesta",
-    "creado_en": "2025-12-06T22:03:06.461Z"
-  },
-  {
-    "id_mensaje": 10,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaa",
-    "creado_en": "2025-12-06T22:03:31.942Z"
-  },
-  {
-    "id_mensaje": 1,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aa",
-    "creado_en": "2025-12-06T22:03:32.871Z"
-  },
-  {
-    "id_mensaje": 11,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaa",
-    "creado_en": "2025-12-06T22:03:32.920Z"
-  },
-  {
-    "id_mensaje": 1,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "a",
-    "creado_en": "2025-12-06T22:03:33.846Z"
-  },
-  {
-    "id_mensaje": 1,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aa",
-    "creado_en": "2025-12-06T22:03:33.914Z"
-  },
-  {
-    "id_mensaje": 12,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "a",
-    "creado_en": "2025-12-06T22:03:34.131Z"
-  },
-  {
-    "id_mensaje": 13,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "a",
-    "creado_en": "2025-12-06T22:03:35.095Z"
-  },
-  {
-    "id_mensaje": 14,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaaa",
-    "creado_en": "2025-12-06T22:03:35.129Z"
-  },
-  {
-    "id_mensaje": 15,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaaaa",
-    "creado_en": "2025-12-06T22:03:35.184Z"
-  },
-  {
-    "id_mensaje": 16,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "a",
-    "creado_en": "2025-12-06T22:03:35.439Z"
-  },
-  {
-    "id_mensaje": 1,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaa",
-    "creado_en": "2025-12-06T22:03:36.596Z"
-  },
-  {
-    "id_mensaje": 17,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "aaaaa",
-    "creado_en": "2025-12-06T22:03:36.651Z"
-  },
-  {
-    "id_mensaje": 1,
-    "id_conversacion": 1,
-    "emisor_tipo": "CLIENTE",
-    "emisor_id": 2,
-    "contenido": "a",
-    "creado_en": "2025-12-06T22:03:38.069Z"
+    "contenido": "Hola",
+    "creado_en": "2025-12-06T23:24:52.028Z"
   },
   {
     "id_mensaje": 18,
@@ -158,5 +46,21 @@
     "emisor_id": 3,
     "contenido": "hola",
     "creado_en": "2025-12-06T22:18:58.513Z"
+  },
+  {
+    "id_mensaje": 20,
+    "id_conversacion": 1,
+    "emisor_tipo": "SUPERVISOR",
+    "emisor_id": 1,
+    "contenido": "Holaa",
+    "creado_en": "2025-12-06T23:49:38.100Z"
+  },
+  {
+    "id_mensaje": 21,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "hola",
+    "creado_en": "2025-12-06T23:49:55.800Z"
   }
 ]

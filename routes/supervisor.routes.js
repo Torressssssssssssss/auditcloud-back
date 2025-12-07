@@ -1,7 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { readJson, writeJson, getNextId } = require('../utils/jsonDb');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize } = require('../utils/auth');
+
+// Configuración de multer para subida de archivos
+const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ['application/pdf'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Tipo de archivo no soportado. Solo PDF.'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: fileFilter
+});
 
 // GET /api/supervisor/auditores/:idEmpresa
 router.get('/auditores/:idEmpresa', authenticate, authorize([1]), async (req, res) => {
@@ -382,9 +416,30 @@ router.put('/auditorias/:idAuditoria/estado', authenticate, authorize([1]), asyn
   const estadoValido = estados.some(e => e.id_estado === Number(id_estado));
   if (!estadoValido) return res.status(400).json({ message: 'Estado de auditoría inválido' });
 
+  const estadoAnterior = auditorias[auditoriaIdx].id_estado;
   auditorias[auditoriaIdx].id_estado = Number(id_estado);
   auditorias[auditoriaIdx].estado_actualizado_en = new Date().toISOString();
   await writeJson('auditorias.json', auditorias);
+
+  // Crear notificación para el cliente
+  try {
+    const estados = await readJson('estados_auditoria.json');
+    const nuevoEstado = estados.find(e => e.id_estado === Number(id_estado));
+    const nombreEstado = nuevoEstado ? (nuevoEstado.nombre || nuevoEstado.clave) : `Estado ${id_estado}`;
+    
+    if (auditorias[auditoriaIdx].id_cliente) {
+      await crearNotificacion({
+        id_cliente: auditorias[auditoriaIdx].id_cliente,
+        id_auditoria: idAuditoria,
+        tipo: 'estado_cambiado',
+        titulo: 'Estado de auditoría actualizado',
+        mensaje: `La auditoría #${idAuditoria} ha cambiado de estado a ${nombreEstado}`
+      });
+    }
+  } catch (notifError) {
+    // No fallar la operación si la notificación falla
+    console.error('Error al crear notificación de cambio de estado:', notifError);
+  }
 
   res.json({ message: 'Estado de auditoría actualizado', auditoria: auditorias[auditoriaIdx] });
 });
@@ -536,35 +591,65 @@ router.get('/mensajes/:idConversacion', authenticate, authorize([1]), async (req
 
 // POST /api/supervisor/mensajes
 router.post('/mensajes', authenticate, authorize([1]), async (req, res) => {
-  const { id_conversacion, contenido } = req.body;
-  
-  if (!id_conversacion || !contenido) return res.status(400).json({message: 'Faltan datos'});
+  try {
+    const { id_conversacion, contenido } = req.body;
+    const idUsuario = req.user.id_usuario;
+    
+    if (!id_conversacion || !contenido) {
+      return res.status(400).json({ message: 'Faltan datos' });
+    }
 
-  const mensajes = await readJson('mensajes.json');
-  const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const conversaciones = await readJson('conversaciones.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
 
-  const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
-  if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
-    return res.status(403).json({ message: 'Conversación no válida' });
+    const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+    if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
+      return res.status(403).json({ message: 'Conversación no válida' });
+    }
+
+    const conversacion = conversaciones[idxConv];
+
+    const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+    const nuevoMensaje = {
+      id_mensaje: idMensaje,
+      id_conversacion: Number(id_conversacion),
+      emisor_tipo: 'SUPERVISOR',
+      emisor_id: idUsuario,
+      contenido: contenido,
+      creado_en: new Date().toISOString()
+    };
+
+    mensajes.push(nuevoMensaje);
+    await writeJson('mensajes.json', mensajes);
+
+    // Actualizar fecha de conversación
+    conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+    await writeJson('conversaciones.json', conversaciones);
+
+    // Crear notificación para el cliente
+    try {
+      const empresa = empresas.find(e => e.id_empresa === conversacion.id_empresa_auditora);
+      const nombreEmpresa = empresa ? empresa.nombre : 'Empresa auditora';
+
+      await crearNotificacion({
+        id_cliente: conversacion.id_cliente,
+        id_auditoria: null,
+        tipo: 'mensaje_nuevo',
+        titulo: 'Nuevo mensaje',
+        mensaje: `Tienes un nuevo mensaje de ${nombreEmpresa}`
+      });
+    } catch (notifError) {
+      // No fallar la operación si la notificación falla
+      console.error('Error al crear notificación de mensaje:', notifError);
+    }
+
+    res.status(201).json(nuevoMensaje);
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ message: error.message || 'Error al enviar mensaje' });
   }
-
-  const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
-  const nuevoMensaje = {
-    id_mensaje: idMensaje,
-    id_conversacion: Number(id_conversacion),
-    emisor_tipo: 'SUPERVISOR', // Identificador clave
-    emisor_id: req.user.id_usuario,
-    contenido: contenido,
-    creado_en: new Date().toISOString()
-  };
-
-  mensajes.push(nuevoMensaje);
-  await writeJson('mensajes.json', mensajes);
-
-  conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
-  await writeJson('conversaciones.json', conversaciones);
-
-  res.status(201).json(nuevoMensaje);
 });
 
 // GET /api/supervisor/auditorias/:idEmpresa
@@ -779,6 +864,75 @@ router.get('/auditorias/:idAuditoria/evidencias', authenticate, authorize([1]), 
   }
 });
 
-module.exports = router;
+// POST /api/supervisor/reportes
+// Subir un reporte para una auditoría
+router.post('/reportes', authenticate, authorize([1]), upload.single('archivo'), async (req, res) => {
+  try {
+    const { id_auditoria, nombre, tipo } = req.body;
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Debes subir un archivo PDF' });
+    }
+    if (!id_auditoria || !nombre) {
+      return res.status(400).json({ message: 'id_auditoria y nombre son obligatorios' });
+    }
+
+    const reportes = await readJson('reportes.json');
+    const auditorias = await readJson('auditorias.json');
+    const usuarios = await readJson('usuarios.json');
+
+    // Verificar que la auditoría existe y pertenece a la empresa del supervisor
+    const auditoria = auditorias.find(a => a.id_auditoria === Number(id_auditoria));
+    if (!auditoria) {
+      return res.status(404).json({ message: 'Auditoría no encontrada' });
+    }
+
+    const usuario = usuarios.find(u => u.id_usuario === req.user.id_usuario && u.id_rol === 1 && u.activo);
+    if (!usuario || usuario.id_empresa !== auditoria.id_empresa_auditora) {
+      return res.status(403).json({ message: 'No tienes permisos para subir reportes de esta auditoría' });
+    }
+
+    const idReporte = await getNextId('reportes.json', 'id_reporte');
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+    const nuevoReporte = {
+      id_reporte: idReporte,
+      id_auditoria: Number(id_auditoria),
+      nombre: nombre,
+      tipo: tipo || 'Reporte Final',
+      url: fileUrl,
+      nombre_archivo: req.file.originalname,
+      fecha_elaboracion: new Date().toISOString(),
+      fecha_subida: new Date().toISOString(),
+      creado_en: new Date().toISOString()
+    };
+
+    reportes.push(nuevoReporte);
+    await writeJson('reportes.json', reportes);
+
+    // Crear notificación para el cliente
+    try {
+      if (auditoria.id_cliente) {
+        await crearNotificacion({
+          id_cliente: auditoria.id_cliente,
+          id_auditoria: auditoria.id_auditoria,
+          tipo: 'reporte_subido',
+          titulo: 'Nuevo reporte disponible',
+          mensaje: `Se ha subido un nuevo reporte para la auditoría #${auditoria.id_auditoria}`
+        });
+      }
+    } catch (notifError) {
+      console.error('Error al crear notificación de reporte:', notifError);
+    }
+
+    res.status(201).json({ 
+      message: 'Reporte subido correctamente', 
+      reporte: nuevoReporte 
+    });
+  } catch (error) {
+    console.error('Error al subir reporte:', error);
+    res.status(500).json({ message: error.message || 'Error al subir reporte' });
+  }
+});
 
 module.exports = router;

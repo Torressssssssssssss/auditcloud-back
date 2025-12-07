@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { readJson, writeJson, getNextId } = require('../utils/jsonDb');
+const path = require('path');
+const fs = require('fs');
+const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize, signToken } = require('../utils/auth');
 const bcrypt = require('bcryptjs');
 
@@ -560,6 +562,250 @@ router.get('/auditorias/:idAuditoria/detalle', authenticate, authorize([3]), asy
   } catch (error) {
     console.error('Error al obtener detalle de auditoría:', error);
     res.status(500).json({ message: error.message || 'Error al obtener detalle de auditoría' });
+  }
+});
+
+// ==========================================
+// RUTAS DE NOTIFICACIONES
+// ==========================================
+
+// GET /api/cliente/notificaciones/:idCliente
+// Obtener todas las notificaciones del cliente
+router.get('/notificaciones/:idCliente', authenticate, authorize([3]), async (req, res) => {
+  try {
+    const idCliente = Number(req.params.idCliente);
+    const idUsuario = req.user.id_usuario;
+
+    // Verificar que el cliente está pidiendo sus propias notificaciones
+    if (idCliente !== idUsuario) {
+      return res.status(403).json({ message: 'No tienes permisos para ver estas notificaciones' });
+    }
+
+    const notificaciones = await readJson('notificaciones.json');
+    const auditorias = await readJson('auditorias.json');
+    const empresas = await readJson('empresas.json');
+
+    // Filtrar notificaciones del cliente y enriquecer con datos de auditoría
+    const notificacionesCliente = notificaciones
+      .filter(n => n.id_cliente === idCliente)
+      .map(notificacion => {
+        let auditoriaData = null;
+        
+        if (notificacion.id_auditoria) {
+          const auditoria = auditorias.find(a => a.id_auditoria === notificacion.id_auditoria);
+          if (auditoria) {
+            const empresa = empresas.find(e => e.id_empresa === auditoria.id_empresa_auditora);
+            auditoriaData = {
+              id_auditoria: auditoria.id_auditoria,
+              empresa: empresa ? {
+                id_empresa: empresa.id_empresa,
+                nombre: empresa.nombre
+              } : null
+            };
+          }
+        }
+
+        return {
+          id_notificacion: notificacion.id_notificacion,
+          id_cliente: notificacion.id_cliente,
+          id_auditoria: notificacion.id_auditoria,
+          tipo: notificacion.tipo,
+          titulo: notificacion.titulo,
+          mensaje: notificacion.mensaje,
+          fecha: notificacion.fecha,
+          leida: notificacion.leida,
+          auditoria: auditoriaData
+        };
+      })
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha)); // Más recientes primero
+
+    res.json(notificacionesCliente);
+  } catch (error) {
+    console.error('Error al obtener notificaciones:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener notificaciones' });
+  }
+});
+
+// PUT /api/cliente/notificaciones/:idNotificacion/leer
+// Marcar una notificación como leída
+router.put('/notificaciones/:idNotificacion/leer', authenticate, authorize([3]), async (req, res) => {
+  try {
+    const idNotificacion = Number(req.params.idNotificacion);
+    const idUsuario = req.user.id_usuario;
+
+    const notificaciones = await readJson('notificaciones.json');
+    const notificacionIdx = notificaciones.findIndex(n => n.id_notificacion === idNotificacion);
+
+    if (notificacionIdx === -1) {
+      return res.status(404).json({ message: 'Notificación no encontrada' });
+    }
+
+    // Verificar que la notificación pertenece al cliente
+    if (notificaciones[notificacionIdx].id_cliente !== idUsuario) {
+      return res.status(403).json({ message: 'No tienes permisos para marcar esta notificación como leída' });
+    }
+
+    // Marcar como leída
+    notificaciones[notificacionIdx].leida = true;
+    await writeJson('notificaciones.json', notificaciones);
+
+    res.json({ 
+      message: 'Notificación marcada como leída',
+      notificacion: notificaciones[notificacionIdx]
+    });
+  } catch (error) {
+    console.error('Error al marcar notificación como leída:', error);
+    res.status(500).json({ message: error.message || 'Error al marcar notificación como leída' });
+  }
+});
+
+// PUT /api/cliente/notificaciones/:idCliente/leer-todas
+// Marcar todas las notificaciones del cliente como leídas
+router.put('/notificaciones/:idCliente/leer-todas', authenticate, authorize([3]), async (req, res) => {
+  try {
+    const idCliente = Number(req.params.idCliente);
+    const idUsuario = req.user.id_usuario;
+
+    // Verificar que el cliente está marcando sus propias notificaciones
+    if (idCliente !== idUsuario) {
+      return res.status(403).json({ message: 'No tienes permisos para marcar estas notificaciones' });
+    }
+
+    const notificaciones = await readJson('notificaciones.json');
+    
+    // Contar y marcar todas las notificaciones no leídas del cliente
+    let contador = 0;
+    notificaciones.forEach(notificacion => {
+      if (notificacion.id_cliente === idCliente && !notificacion.leida) {
+        notificacion.leida = true;
+        contador++;
+      }
+    });
+
+    await writeJson('notificaciones.json', notificaciones);
+
+    res.json({ 
+      message: `${contador} notificaciones marcadas como leídas`,
+      cantidad_actualizadas: contador
+    });
+  } catch (error) {
+    console.error('Error al marcar todas las notificaciones como leídas:', error);
+    res.status(500).json({ message: error.message || 'Error al marcar notificaciones como leídas' });
+  }
+});
+
+// ==========================================
+// RUTAS DE REPORTES
+// ==========================================
+
+// GET /api/cliente/reportes/:idCliente
+// Obtener todos los reportes de las auditorías del cliente
+router.get('/reportes/:idCliente', authenticate, authorize([3]), async (req, res) => {
+  try {
+    const idCliente = Number(req.params.idCliente);
+    const idUsuario = req.user.id_usuario;
+
+    // Verificar que el cliente está pidiendo sus propios reportes
+    if (idCliente !== idUsuario) {
+      return res.status(403).json({ message: 'No tienes permisos para ver estos reportes' });
+    }
+
+    const reportes = await readJson('reportes.json');
+    const auditorias = await readJson('auditorias.json');
+    const empresas = await readJson('empresas.json');
+
+    // Filtrar reportes de auditorías del cliente
+    const reportesCliente = reportes
+      .filter(reporte => {
+        const auditoria = auditorias.find(a => a.id_auditoria === reporte.id_auditoria);
+        return auditoria && auditoria.id_cliente === idCliente;
+      })
+      .map(reporte => {
+        const auditoria = auditorias.find(a => a.id_auditoria === reporte.id_auditoria);
+        const empresa = auditoria ? empresas.find(e => e.id_empresa === auditoria.id_empresa_auditora) : null;
+
+        return {
+          id_reporte: reporte.id_reporte,
+          id_auditoria: reporte.id_auditoria,
+          nombre: reporte.nombre || reporte.titulo || 'Reporte sin nombre',
+          tipo: reporte.tipo || 'Reporte Final',
+          fecha_elaboracion: reporte.fecha_elaboracion || reporte.creado_en || reporte.fecha,
+          fecha_subida: reporte.fecha_subida || reporte.creado_en || reporte.fecha,
+          url: reporte.url || reporte.archivo_url || null,
+          auditoria: auditoria ? {
+            id_auditoria: auditoria.id_auditoria,
+            empresa: empresa ? {
+              id_empresa: empresa.id_empresa,
+              nombre: empresa.nombre
+            } : null
+          } : null
+        };
+      })
+      .sort((a, b) => {
+        // Ordenar por fecha_elaboracion DESC (más recientes primero)
+        const fechaA = new Date(a.fecha_elaboracion);
+        const fechaB = new Date(b.fecha_elaboracion);
+        return fechaB - fechaA;
+      });
+
+    res.json(reportesCliente);
+  } catch (error) {
+    console.error('Error al obtener reportes:', error);
+    res.status(500).json({ message: error.message || 'Error al obtener reportes' });
+  }
+});
+
+// GET /api/cliente/auditorias/:idAuditoria/reporte
+// Descargar el reporte de una auditoría específica
+router.get('/auditorias/:idAuditoria/reporte', authenticate, authorize([3]), async (req, res) => {
+  try {
+    const idAuditoria = Number(req.params.idAuditoria);
+    const idUsuario = req.user.id_usuario;
+
+    const auditorias = await readJson('auditorias.json');
+    const reportes = await readJson('reportes.json');
+
+    // Verificar que la auditoría existe y pertenece al cliente
+    const auditoria = auditorias.find(a => a.id_auditoria === idAuditoria);
+    if (!auditoria) {
+      return res.status(404).json({ message: 'Auditoría no encontrada' });
+    }
+
+    if (auditoria.id_cliente !== idUsuario) {
+      return res.status(403).json({ message: 'No tienes permisos para ver este reporte' });
+    }
+
+    // Buscar el reporte de esta auditoría
+    const reporte = reportes.find(r => r.id_auditoria === idAuditoria);
+    if (!reporte) {
+      return res.status(404).json({ message: 'No hay reporte disponible para esta auditoría' });
+    }
+
+    // Obtener la URL del archivo
+    const fileUrl = reporte.url || reporte.archivo_url;
+    if (!fileUrl) {
+      return res.status(404).json({ message: 'Archivo de reporte no encontrado' });
+    }
+
+    // Extraer el nombre del archivo de la URL
+    // La URL puede ser: http://host/uploads/filename.pdf o /uploads/filename.pdf
+    const fileName = fileUrl.split('/').pop();
+    const filePath = path.join(__dirname, '..', 'data', 'uploads', fileName);
+
+    // Verificar que el archivo existe
+    try {
+      await fs.promises.access(filePath);
+    } catch (err) {
+      return res.status(404).json({ message: 'Archivo de reporte no encontrado en el servidor' });
+    }
+
+    // Enviar el archivo PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${reporte.nombre_archivo || fileName}"`);
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('Error al descargar reporte:', error);
+    res.status(500).json({ message: error.message || 'Error al descargar reporte' });
   }
 });
 

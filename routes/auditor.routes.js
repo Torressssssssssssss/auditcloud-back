@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { readJson, writeJson, getNextId } = require('../utils/jsonDb');
+const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize } = require('../utils/auth');
 
 // ==========================================
@@ -172,6 +172,25 @@ router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'
     evidencias.push(nueva);
     await writeJson('evidencias.json', evidencias);
 
+    // Crear notificación para el cliente
+    try {
+      const auditorias = await readJson('auditorias.json');
+      const auditoria = auditorias.find(a => a.id_auditoria === Number(id_auditoria));
+      
+      if (auditoria && auditoria.id_cliente) {
+        await crearNotificacion({
+          id_cliente: auditoria.id_cliente,
+          id_auditoria: auditoria.id_auditoria,
+          tipo: 'evidencia_subida',
+          titulo: 'Nueva evidencia subida',
+          mensaje: `El auditor ha subido una nueva evidencia para la auditoría #${auditoria.id_auditoria}`
+        });
+      }
+    } catch (notifError) {
+      // No fallar la operación si la notificación falla
+      console.error('Error al crear notificación de evidencia:', notifError);
+    }
+
     res.status(201).json({ message: 'Evidencia subida correctamente', evidencia: nueva });
   } catch (error) {
     console.error('Error al subir evidencia:', error);
@@ -326,6 +345,10 @@ router.get('/solicitudes-pago', authenticate, authorize([2]), async (req, res) =
   }
 });
 
+// ==========================================
+// RUTAS DE MENSAJES Y CONVERSACIONES
+// ==========================================
+
 // GET /api/auditor/conversaciones
 // El auditor ve las conversaciones de SU empresa con los clientes
 router.get('/conversaciones', authenticate, authorize([2]), async (req, res) => {
@@ -394,38 +417,78 @@ router.get('/mensajes/:idConversacion', authenticate, authorize([2]), async (req
 });
 
 // POST /api/auditor/mensajes
+// Enviar mensaje desde el auditor
 router.post('/mensajes', authenticate, authorize([2]), async (req, res) => {
-  const { id_conversacion, contenido } = req.body;
-  
-  if (!id_conversacion || !contenido) return res.status(400).json({message: 'Faltan datos'});
+  try {
+    const { id_conversacion, contenido } = req.body;
+    const idUsuario = req.user.id_usuario;
 
-  const mensajes = await readJson('mensajes.json');
-  const conversaciones = await readJson('conversaciones.json');
+    if (!id_conversacion || !contenido) {
+      return res.status(400).json({ message: 'id_conversacion y contenido son obligatorios' });
+    }
 
-  // Validar pertenencia
-  const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
-  if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
-    return res.status(403).json({ message: 'Conversación no válida' });
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
+
+    const conversacion = conversaciones.find(c => c.id_conversacion === Number(id_conversacion) && c.activo);
+    if (!conversacion) {
+      return res.status(404).json({ message: 'Conversación no encontrada' });
+    }
+
+    // Verificar que el auditor pertenece a la empresa auditora de esta conversación
+    const usuario = usuarios.find(u => u.id_usuario === idUsuario && u.id_rol === 2 && u.activo);
+    if (!usuario) {
+      return res.status(403).json({ message: 'Usuario no válido' });
+    }
+
+    const empresaAuditora = empresas.find(e => e.id_empresa === usuario.id_empresa);
+    if (!empresaAuditora || empresaAuditora.id_empresa !== conversacion.id_empresa_auditora) {
+      return res.status(403).json({ message: 'No tienes permisos para enviar mensajes en esta conversación' });
+    }
+
+    // Crear el mensaje
+    const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+    const nuevoMensaje = {
+      id_mensaje: idMensaje,
+      id_conversacion: Number(id_conversacion),
+      emisor_tipo: 'AUDITOR',
+      emisor_id: idUsuario,
+      contenido: contenido,
+      creado_en: new Date().toISOString()
+    };
+    mensajes.push(nuevoMensaje);
+    await writeJson('mensajes.json', mensajes);
+
+    // Actualizar fecha de conversación
+    const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+    if (idxConv !== -1) {
+      conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+      await writeJson('conversaciones.json', conversaciones);
+    }
+
+    // Crear notificación para el cliente
+    try {
+      const nombreEmpresa = empresaAuditora ? empresaAuditora.nombre : 'Empresa auditora';
+
+      await crearNotificacion({
+        id_cliente: conversacion.id_cliente,
+        id_auditoria: null,
+        tipo: 'mensaje_nuevo',
+        titulo: 'Nuevo mensaje',
+        mensaje: `Tienes un nuevo mensaje de ${nombreEmpresa}`
+      });
+    } catch (notifError) {
+      // No fallar la operación si la notificación falla
+      console.error('Error al crear notificación de mensaje:', notifError);
+    }
+
+    res.status(201).json(nuevoMensaje);
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ message: error.message || 'Error al enviar mensaje' });
   }
-
-  const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
-  const nuevoMensaje = {
-    id_mensaje: idMensaje,
-    id_conversacion: Number(id_conversacion),
-    emisor_tipo: 'AUDITOR', // Importante: Se identifica como Auditor
-    emisor_id: req.user.id_usuario,
-    contenido: contenido,
-    creado_en: new Date().toISOString()
-  };
-
-  mensajes.push(nuevoMensaje);
-  await writeJson('mensajes.json', mensajes);
-
-  // Actualizar fecha de conversación
-  conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
-  await writeJson('conversaciones.json', conversaciones);
-
-  res.status(201).json(nuevoMensaje);
 });
 
 module.exports = router;
