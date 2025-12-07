@@ -686,8 +686,8 @@ router.get('/auditorias/:idEmpresa', authenticate, authorize([1]), async (req, r
         id_empresa_auditora: auditoria.id_empresa_auditora,
         id_estado: auditoria.id_estado,
         modulos: modulos,
+        objetivo: auditoria.objetivo,
         fecha_creacion: auditoria.creada_en || auditoria.creado_en,
-        fecha_inicio: auditoria.fecha_inicio || null,
         monto: auditoria.monto || null,
         cliente: cliente ? {
           id_usuario: cliente.id_usuario,

@@ -7,6 +7,7 @@
     "id_estado": 2,
     "monto": 1500,
     "creada_en": "2025-12-06T05:22:04.407Z",
-    "estado_actualizado_en": "2025-12-06T16:55:12.251Z"
+    "estado_actualizado_en": "2025-12-06T16:55:12.251Z",
+    "objetivo": "Prueba"
   }
 ]

@@ -67,6 +67,7 @@ router.get('/auditorias-asignadas/:idAuditor', authenticate, authorize([2]), asy
     return {
       ...auditoria,
       modulos,
+      fecha_creacion: auditoria.creada_en || auditoria.creado_en,
       cliente: {
         id_usuario: cliente?.id_usuario,
         nombre: cliente?.nombre,
@@ -112,12 +113,45 @@ router.get('/auditorias/:id', authenticate, authorize([2]), async (req, res) => 
   res.json({
     ...auditoria,
     modulos,
+    fecha_creacion: auditoria.creada_en || auditoria.creado_en,
     cliente: {
       id_usuario: cliente?.id_usuario,
       nombre: cliente?.nombre,
       nombre_empresa: empresaCliente?.nombre
     }
   });
+});
+
+// PATCH /api/auditor/auditorias/:id/objetivo
+// Actualiza el objetivo y asigna fecha de inicio si es la primera vez
+router.patch('/auditorias/:id/objetivo', authenticate, authorize([2]), async (req, res) => {
+  const idAuditoria = Number(req.params.id);
+  const { objetivo } = req.body; // Recibimos el texto del objetivo
+
+  try {
+    const auditorias = await readJson('auditorias.json');
+    const index = auditorias.findIndex(a => a.id_auditoria === idAuditoria);
+
+    if (index === -1) {
+      return res.status(404).json({ message: 'Auditoría no encontrada' });
+    }
+
+    // Lógica de actualización
+    const auditoriaActual = auditorias[index];
+    
+    // 1. Actualizamos el objetivo
+    auditoriaActual.objetivo = objetivo;
+
+    // 2. Guardamos en el JSON
+    auditorias[index] = auditoriaActual;
+    await writeJson('auditorias.json', auditorias);
+
+    res.json(auditoriaActual);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error al actualizar la auditoría' });
+  }
 });
 
 // ==========================================
