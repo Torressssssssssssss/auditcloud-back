@@ -733,4 +733,52 @@ router.get('/clientes-con-auditorias', authenticate, authorize([1]), async (req,
   }
 });
 
+// GET /api/supervisor/auditorias/:idAuditoria/evidencias
+// Obtiene todas las evidencias de una auditoría específica (con validación de propiedad)
+router.get('/auditorias/:idAuditoria/evidencias', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idAuditoria = Number(req.params.idAuditoria);
+    const idEmpresaSupervisor = req.user.id_empresa;
+
+    const auditorias = await readJson('auditorias.json');
+    const evidencias = await readJson('evidencias.json');
+    const usuarios = await readJson('usuarios.json'); // Para saber nombre del auditor
+    const modulosAmbientales = await readJson('modulos_ambientales.json'); // Para nombre del módulo
+
+    // 1. Seguridad: Verificar que la auditoría pertenece a la empresa del supervisor
+    const auditoria = auditorias.find(a => a.id_auditoria === idAuditoria);
+    
+    if (!auditoria) {
+      return res.status(404).json({ message: 'Auditoría no encontrada' });
+    }
+    
+    if (auditoria.id_empresa_auditora !== idEmpresaSupervisor) {
+      return res.status(403).json({ message: 'No tienes permiso para ver evidencias de esta auditoría' });
+    }
+
+    // 2. Filtrar evidencias
+    const misEvidencias = evidencias.filter(e => e.id_auditoria === idAuditoria);
+
+    // 3. Enriquecer datos (Nombre de auditor, Nombre de módulo)
+    const resultado = misEvidencias.map(evidencia => {
+      const auditor = usuarios.find(u => u.id_usuario === evidencia.id_auditor);
+      const modulo = modulosAmbientales.find(m => m.id_modulo === evidencia.id_modulo);
+
+      return {
+        ...evidencia,
+        nombre_auditor: auditor ? auditor.nombre : 'Desconocido',
+        nombre_modulo: modulo ? modulo.nombre : 'General'
+      };
+    });
+
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('Error obteniendo evidencias:', error);
+    res.status(500).json({ message: 'Error interno al cargar evidencias' });
+  }
+});
+
+module.exports = router;
+
 module.exports = router;
