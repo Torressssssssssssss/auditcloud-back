@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id_mensaje": 1,
+    "id_conversacion": 1,
+    "emisor_tipo": "CLIENTE",
+    "emisor_id": 2,
+    "contenido": "buenas tardes",
+    "creado_en": "2025-12-07T21:53:25.786Z"
+  },
+  {
+    "id_mensaje": 2,
+    "id_conversacion": 1,
+    "emisor_tipo": "SUPERVISOR",
+    "emisor_id": 1,
+    "contenido": "saludos buenas tardes",
+    "creado_en": "2025-12-07T21:54:23.932Z"
+  }
+]

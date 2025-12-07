@@ -1,2 +1,11 @@
 [
+  {
+    "id_conversacion": 1,
+    "id_cliente": 2,
+    "id_empresa_auditora": 1,
+    "asunto": "Consulta General",
+    "creado_en": "2025-12-07T21:53:25.754Z",
+    "activo": true,
+    "ultimo_mensaje_fecha": "2025-12-07T21:54:23.932Z"
+  }
 ]

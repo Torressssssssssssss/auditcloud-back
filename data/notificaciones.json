@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "id_notificacion": 1,
+    "id_cliente": 2,
+    "id_auditoria": null,
+    "tipo": "mensaje_nuevo",
+    "titulo": "Nuevo mensaje",
+    "mensaje": "Tienes un nuevo mensaje de Auditora Demo S.A. de C.V.",
+    "fecha": "2025-12-07T21:54:23.935Z",
+    "leida": false
+  }
+]
