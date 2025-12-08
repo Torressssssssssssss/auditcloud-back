@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path'); // Importar path
 const cors = require('cors');
+const fs = require('fs');
+const { decryptFile } = require('./utils/encryption');
 
 const authRoutes = require('./routes/auth.routes');
 const supervisorRoutes = require('./routes/supervisor.routes');
@@ -23,8 +25,50 @@ app.use('/api/supervisor', supervisorRoutes);
 app.use('/api/cliente', clienteRoutes);
 app.use('/api/auditor', auditorRoutes);
 app.use('/api/paypal', paypalRoutes);
-// Servir archivos subidos desde `back/data/uploads` en la ruta pública /uploads
-app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
+
+// Middleware personalizado para servir archivos cifrados desde /uploads
+// Descifra los archivos antes de servirlos
+app.use('/uploads', async (req, res, next) => {
+  try {
+    const fileName = req.path.split('/').pop();
+    if (!fileName) {
+      return next();
+    }
+    
+    const filePath = path.join(__dirname, 'data', 'uploads', fileName);
+    
+    // Verificar que el archivo existe
+    try {
+      await fs.promises.access(filePath);
+    } catch (err) {
+      return res.status(404).json({ message: 'Archivo no encontrado' });
+    }
+    
+    // Descifrar el archivo
+    const decrypted = await decryptFile(filePath);
+    
+    // Determinar el tipo de contenido basado en la extensión
+    const ext = path.extname(fileName).toLowerCase();
+    const contentTypeMap = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif'
+    };
+    
+    const contentType = contentTypeMap[ext] || 'application/octet-stream';
+    
+    // Enviar el archivo descifrado
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.send(decrypted);
+  } catch (error) {
+    console.error('Error sirviendo archivo cifrado:', error);
+    res.status(500).json({ message: 'Error al procesar el archivo' });
+  }
+});
+
 app.use('/api/timeline', timelineRoutes); 
 
 // Salud

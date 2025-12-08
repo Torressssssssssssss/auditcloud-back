@@ -923,10 +923,14 @@ router.get('/auditorias/:idAuditoria/reporte', authenticate, authorize([3]), asy
       return res.status(404).json({ message: 'Archivo de reporte no encontrado en el servidor' });
     }
 
-    // Enviar el archivo PDF
+    // Descifrar el archivo antes de enviarlo
+    const { decryptFile } = require('../utils/encryption');
+    const decrypted = await decryptFile(filePath);
+
+    // Enviar el archivo PDF descifrado
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${reporte.nombre_archivo || fileName}"`);
-    res.sendFile(filePath);
+    res.send(decrypted);
   } catch (error) {
     console.error('Error al descargar reporte:', error);
     res.status(500).json({ message: error.message || 'Error al descargar reporte' });

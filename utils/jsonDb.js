@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { enviarAlertaNotificacion } = require('./email.service');
+const { readEncryptedJson, writeEncryptedJson } = require('./encryption');
 
 // Ruta base a la carpeta de datos
 const dataDir = path.join(__dirname, '..', 'data');
@@ -11,18 +12,19 @@ if (!fs.existsSync(dataDir)) {
 }
 
 /**
- * Lee un archivo JSON y retorna su contenido parseado.
- * Si el archivo no existe, lo crea con un array vacío.
+ * Lee un archivo JSON cifrado y retorna su contenido parseado.
+ * Si el archivo no existe, lo crea con un array vacío cifrado.
  */
 const readJson = async (filename) => {
   const filePath = path.join(dataDir, filename);
   try {
     if (!fs.existsSync(filePath)) {
-      await fs.promises.writeFile(filePath, '[]');
+      // Crear archivo vacío cifrado
+      await writeEncryptedJson(filePath, []);
       return [];
     }
-    const data = await fs.promises.readFile(filePath, 'utf8');
-    return JSON.parse(data || '[]');
+    // Leer y descifrar el archivo JSON
+    return await readEncryptedJson(filePath);
   } catch (error) {
     console.error(`Error leyendo ${filename}:`, error);
     return [];
@@ -30,12 +32,12 @@ const readJson = async (filename) => {
 };
 
 /**
- * Escribe datos en un archivo JSON.
+ * Escribe datos en un archivo JSON cifrado.
  */
 const writeJson = async (filename, data) => {
   const filePath = path.join(dataDir, filename);
   try {
-    await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
+    await writeEncryptedJson(filePath, data);
     return true;
   } catch (error) {
     console.error(`Error escribiendo ${filename}:`, error);

@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { readJson, writeJson, getNextId, crearNotificacion } = require('../utils/jsonDb');
 const { authenticate, authorize } = require('../utils/auth');
+const { encryptFile } = require('../utils/encryption');
 
 // ==========================================
 // 1. CONFIGURACIÓN DE MULTER (Disk Storage)
@@ -14,7 +15,7 @@ const { authenticate, authorize } = require('../utils/auth');
 const uploadDir = path.join(__dirname, '..', 'data', 'uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
 
-// Disk storage - guardar archivos localmente
+// Disk storage - guardar archivos localmente y cifrarlos
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadDir);
@@ -27,6 +28,26 @@ const storage = multer.diskStorage({
     cb(null, filename);
   }
 });
+
+// Middleware personalizado para cifrar archivos después de subirlos
+const encryptAfterUpload = async (req, res, next) => {
+  if (req.file) {
+    try {
+      const filePath = path.join(uploadDir, req.file.filename);
+      await encryptFile(filePath);
+    } catch (error) {
+      console.error('Error cifrando archivo subido:', error);
+      // Si falla el cifrado, eliminar el archivo
+      try {
+        await fs.promises.unlink(path.join(uploadDir, req.file.filename));
+      } catch (unlinkError) {
+        console.error('Error eliminando archivo después de fallo de cifrado:', unlinkError);
+      }
+      return res.status(500).json({ message: 'Error al procesar el archivo' });
+    }
+  }
+  next();
+};
 
 // Filtro para seguridad (Solo imágenes y PDFs)
 const fileFilter = (req, file, cb) => {
@@ -175,7 +196,7 @@ router.patch('/auditorias/:id/objetivo', authenticate, authorize([2]), async (re
 // POST /api/auditor/evidencias
 // Sube un archivo y crea el registro de evidencia
 // Si tipo === 'COMENTARIO', no se requiere archivo
-router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
+router.post('/evidencias', authenticate, authorize([2]), upload.single('archivo'), encryptAfterUpload, async (req, res) => {
   try {
     const { id_auditoria, id_modulo, tipo, descripcion } = req.body;
     
@@ -531,7 +552,7 @@ router.post('/mensajes', authenticate, authorize([2]), async (req, res) => {
 // 6. RUTAS DE REPORTES (AUDITOR)
 // ==========================================
 
-router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
+router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), encryptAfterUpload, async (req, res) => {
   try {
     const { id_auditoria, nombre } = req.body;
 
@@ -590,7 +611,7 @@ router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'),
 
 // POST /api/auditor/reportes
 // Sube el PDF final y FINALIZA la auditoría
-router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), async (req, res) => {
+router.post('/reportes', authenticate, authorize([2]), upload.single('archivo'), encryptAfterUpload, async (req, res) => {
   try {
     const { id_auditoria, nombre, observaciones } = req.body;
 
