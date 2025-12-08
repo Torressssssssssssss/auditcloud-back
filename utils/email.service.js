@@ -16,8 +16,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS
   },
   // Opciones de depuración para ver errores en consola
-  debug: true, 
-  logger: true 
+  debug: false, 
+  logger: false 
 });
 
 // Verificar conexión al iniciar el servicio
