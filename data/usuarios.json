@@ -13,7 +13,7 @@
     "id_usuario": 2,
     "id_empresa": 2,
     "nombre": "Angel Torres",
-    "correo": "angel@towers.com",
+    "correo": "cubo002@outlook.com",
     "password_hash": "$2a$10$5oV4fqt8d4iyZC2OxrVdeurVTIAbdlHzjVmtC8TTJUwkQX/eKr302",
     "id_rol": 3,
     "activo": true,

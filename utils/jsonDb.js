@@ -1,76 +1,116 @@
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
+const { enviarAlertaNotificacion } = require('./email.service');
 
+// Ruta base a la carpeta de datos
 const dataDir = path.join(__dirname, '..', 'data');
 
-async function readJson(fileName) {
-  const filePath = path.join(dataDir, fileName);
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    if (!content.trim()) return [];
-    return JSON.parse(content);
-  } catch (err) {
-    if (err.code === 'ENOENT') {
-      return [];
-    }
-    throw err;
-  }
-}
-
-async function writeJson(fileName, data) {
-  const filePath = path.join(dataDir, fileName);
-  const content = JSON.stringify(data, null, 2);
-  await fs.writeFile(filePath, content, 'utf8');
-}
-
-async function getNextId(fileName, idField) {
-  const items = await readJson(fileName);
-  if (items.length === 0) return 1;
-  const maxId = items.reduce((max, item) => {
-    return item[idField] > max ? item[idField] : max;
-  }, 0);
-  return maxId + 1;
+// Asegurar que la carpeta data exista
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
 }
 
 /**
- * Crea una notificación para un cliente
- * @param {Object} data - Datos de la notificación
- * @param {number} data.id_cliente - ID del cliente
- * @param {number|null} data.id_auditoria - ID de la auditoría (opcional)
- * @param {string} data.tipo - Tipo de notificación: 'evidencia_subida', 'estado_cambiado', 'reporte_subido', 'mensaje_nuevo'
- * @param {string} data.titulo - Título de la notificación
- * @param {string} data.mensaje - Mensaje de la notificación
+ * Lee un archivo JSON y retorna su contenido parseado.
+ * Si el archivo no existe, lo crea con un array vacío.
+ */
+const readJson = async (filename) => {
+  const filePath = path.join(dataDir, filename);
+  try {
+    if (!fs.existsSync(filePath)) {
+      await fs.promises.writeFile(filePath, '[]');
+      return [];
+    }
+    const data = await fs.promises.readFile(filePath, 'utf8');
+    return JSON.parse(data || '[]');
+  } catch (error) {
+    console.error(`Error leyendo ${filename}:`, error);
+    return [];
+  }
+};
+
+/**
+ * Escribe datos en un archivo JSON.
+ */
+const writeJson = async (filename, data) => {
+  const filePath = path.join(dataDir, filename);
+  try {
+    await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
+    return true;
+  } catch (error) {
+    console.error(`Error escribiendo ${filename}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Calcula el siguiente ID disponible para una colección.
+ */
+const getNextId = async (filename, idField) => {
+  const data = await readJson(filename);
+  if (data.length === 0) return 1;
+  
+  // Mapeamos a números para asegurar cálculo correcto
+  const ids = data.map(item => Number(item[idField]) || 0);
+  const maxId = Math.max(...ids);
+  return maxId + 1;
+};
+
+/**
+ * Crea una notificación en el sistema Y envía un correo electrónico.
+ * @param {Object} data - { id_cliente, id_auditoria, tipo, titulo, mensaje }
  */
 async function crearNotificacion(data) {
-  const { id_cliente, id_auditoria, tipo, titulo, mensaje } = data;
-  
-  if (!id_cliente || !tipo || !titulo || !mensaje) {
-    throw new Error('id_cliente, tipo, titulo y mensaje son obligatorios');
+  try {
+    // 1. Guardar en Base de Datos (JSON)
+    const notificaciones = await readJson('notificaciones.json');
+    const idNotificacion = await getNextId('notificaciones.json', 'id_notificacion');
+
+    const nueva = {
+      id_notificacion: idNotificacion,
+      id_cliente: Number(data.id_cliente),
+      id_auditoria: data.id_auditoria ? Number(data.id_auditoria) : null,
+      tipo: data.tipo, // 'mensaje_nuevo', 'evidencia_subida', 'estado_cambiado', 'reporte_subido'
+      titulo: data.titulo,
+      mensaje: data.mensaje,
+      fecha: new Date().toISOString(),
+      leida: false
+    };
+
+    notificaciones.push(nueva);
+    await writeJson('notificaciones.json', notificaciones);
+
+    // 2. Integración con Servicio de Correo (Segundo Servicio Web)
+    const usuarios = await readJson('usuarios.json');
+    const usuarioDestino = usuarios.find(u => u.id_usuario === Number(data.id_cliente));
+
+    if (usuarioDestino && usuarioDestino.correo) {
+      console.log(`[Notificación] Enviando correo a: ${usuarioDestino.correo}`);
+      
+      // Ejecutamos el envío de correo sin 'await' para no bloquear la respuesta HTTP
+      // (Fire and forget)
+      enviarAlertaNotificacion(
+        usuarioDestino.correo,
+        usuarioDestino.nombre,
+        data.titulo,
+        data.mensaje
+      ).catch(err => console.error('[Notificación] Error al enviar correo:', err));
+      
+    } else {
+      console.warn(`[Notificación] Usuario ${data.id_cliente} no encontrado o sin correo.`);
+    }
+
+    return nueva;
+  } catch (error) {
+    console.error('Error creando notificación:', error);
+    // No lanzamos error para no romper el flujo principal si solo falla la notificación
+    return null; 
   }
-
-  const notificaciones = await readJson('notificaciones.json');
-  const idNotificacion = await getNextId('notificaciones.json', 'id_notificacion');
-
-  const nuevaNotificacion = {
-    id_notificacion: idNotificacion,
-    id_cliente: Number(id_cliente),
-    id_auditoria: id_auditoria ? Number(id_auditoria) : null,
-    tipo: tipo,
-    titulo: titulo,
-    mensaje: mensaje,
-    fecha: new Date().toISOString(),
-    leida: false
-  };
-
-  notificaciones.push(nuevaNotificacion);
-  await writeJson('notificaciones.json', notificaciones);
-
-  return nuevaNotificacion;
 }
 
-module.exports = {
-  readJson,
-  writeJson,
-  getNextId,
-  crearNotificacion
+module.exports = { 
+  readJson, 
+  writeJson, 
+  getNextId, 
+  crearNotificacion 
 };

@@ -38,7 +38,6 @@ router.get('/auditores/:idEmpresa', authenticate, authorize([1]), async (req, re
   const limit = Number(req.query.limit || 20);
   const usuarios = await readJson('usuarios.json');
 
-  // Seguridad: Verificar que el supervisor pide auditores de SU empresa
   if (req.user.id_empresa !== idEmpresa) {
       return res.status(403).json({ message: 'No tienes permiso para ver auditores de otra empresa.' });
   }
@@ -59,7 +58,6 @@ router.post('/auditores', authenticate, authorize([1]), async (req, res) => {
     return res.status(400).json({ message: 'Todos los campos son obligatorios' });
   }
 
-  // Seguridad
   if (req.user.id_empresa !== Number(id_empresa)) {
       return res.status(403).json({ message: 'No puedes crear auditores para otra empresa.' });
   }
@@ -215,14 +213,14 @@ router.put('/empresa/:id', authenticate, authorize([1]), async (req, res) => {
 });
 
 // ==========================================
-// 4. SOLICITUDES DE PAGO (SOLO SUPERVISOR)
+// 4. SOLICITUDES DE PAGO (CORREGIDO)
 // ==========================================
 
 // POST /api/supervisor/solicitudes-pago
 router.post('/solicitudes-pago', authenticate, authorize([1]), async (req, res) => {
   try {
-    const { id_empresa, id_cliente, monto, concepto } = req.body;
-    const id_empresa_auditora = req.user.id_empresa; // El supervisor crea para SU empresa
+    const { id_empresa: id_empresa_destino, id_cliente, monto, concepto } = req.body;
+    const mi_id_empresa = req.user.id_empresa;
 
     if (!monto || !concepto) {
       return res.status(400).json({ message: 'monto y concepto son obligatorios' });
@@ -234,55 +232,47 @@ router.post('/solicitudes-pago', authenticate, authorize([1]), async (req, res) 
 
     let nueva = null;
     const idSolicitud = await getNextId('solicitudes_pago.json', 'id_solicitud');
+    let id_usuario_destino = null;
 
-    // CASO 1: Se envía ID de Empresa Cliente Y ID de Usuario Cliente explícitamente
-    if (id_empresa && id_cliente) {
-      const empresaValida = empresas.some(e => e.id_empresa === Number(id_empresa) && e.activo);
+    // Caso A: Se envió un usuario específico
+    if (id_empresa_destino && id_cliente) {
+      const empresaValida = empresas.some(e => e.id_empresa === Number(id_empresa_destino) && e.activo);
       const clienteValido = usuarios.some(u => u.id_usuario === Number(id_cliente) && u.id_rol === 3 && u.activo);
       
       if (!empresaValida) return res.status(404).json({ message: 'Empresa cliente no encontrada' });
       if (!clienteValido) return res.status(404).json({ message: 'Usuario cliente no encontrado' });
-
-      nueva = {
-        id_solicitud: idSolicitud,
-        id_empresa: Number(id_empresa), // Empresa que paga (Cliente)
-        id_empresa_cliente: Number(id_empresa), // Redundancia para claridad
-        id_empresa_auditora: Number(id_empresa_auditora), // Empresa que cobra (Supervisor)
-        id_cliente: Number(id_cliente), // Usuario notificado
-        monto: Number(monto),
-        concepto,
-        id_estado: 1, // Pendiente
-        creado_en: new Date().toISOString(),
-        creado_por_supervisor: req.user.id_usuario
-      };
-    }
-    // CASO 2: Solo se envía ID de Empresa Cliente (Buscamos al usuario principal)
-    else if (id_empresa && !id_cliente) {
-      const empresaObjetivo = empresas.find(e => e.id_empresa === Number(id_empresa) && e.activo);
-      if (!empresaObjetivo || empresaObjetivo.id_tipo_empresa !== 2) {
+      
+      id_usuario_destino = Number(id_cliente);
+    } 
+    // Caso B: Solo se envió la empresa, buscamos al admin
+    else if (id_empresa_destino && !id_cliente) {
+      const empresaObjetivo = empresas.find(e => e.id_empresa === Number(id_empresa_destino) && e.activo);
+      if (!empresaObjetivo || empresaObjetivo.id_tipo_empresa !== 2) { 
         return res.status(400).json({ message: 'Empresa cliente inválida' });
       }
 
-      const usuarioPrincipal = usuarios.find(u => u.id_empresa === Number(id_empresa) && u.id_rol === 3 && u.activo);
+      const usuarioPrincipal = usuarios.find(u => u.id_empresa === Number(id_empresa_destino) && u.id_rol === 3 && u.activo);
       if (!usuarioPrincipal) {
         return res.status(400).json({ message: 'La empresa no tiene usuarios administradores' });
       }
-
-      nueva = {
-        id_solicitud: idSolicitud,
-        id_empresa: Number(id_empresa),
-        id_empresa_cliente: Number(id_empresa),
-        id_empresa_auditora: Number(id_empresa_auditora),
-        id_cliente: usuarioPrincipal.id_usuario,
-        monto: Number(monto),
-        concepto,
-        id_estado: 1,
-        creado_en: new Date().toISOString(),
-        creado_por_supervisor: req.user.id_usuario
-      };
+      
+      id_usuario_destino = usuarioPrincipal.id_usuario;
     } else {
       return res.status(400).json({ message: 'Faltan datos de la empresa o cliente destino' });
     }
+
+    nueva = {
+      id_solicitud: idSolicitud,
+      id_empresa: Number(mi_id_empresa), // Supervisor es el dueño
+      id_empresa_auditora: Number(mi_id_empresa),
+      id_empresa_cliente: Number(id_empresa_destino), // Cliente es el destino
+      id_cliente: id_usuario_destino,
+      monto: Number(monto),
+      concepto,
+      id_estado: 1, // Pendiente
+      creado_en: new Date().toISOString(),
+      creado_por_supervisor: req.user.id_usuario
+    };
 
     solicitudes.push(nueva);
     await writeJson('solicitudes_pago.json', solicitudes);
@@ -296,7 +286,6 @@ router.post('/solicitudes-pago', authenticate, authorize([1]), async (req, res) 
 });
 
 // GET /api/supervisor/solicitudes-pago
-// Lista las solicitudes de la empresa del supervisor
 router.get('/solicitudes-pago', authenticate, authorize([1]), async (req, res) => {
   try {
     const idEmpresaAuditora = Number(req.user.id_empresa);
@@ -306,27 +295,21 @@ router.get('/solicitudes-pago', authenticate, authorize([1]), async (req, res) =
     const solicitudes = await readJson('solicitudes_pago.json');
     const empresas = await readJson('empresas.json');
 
-    // FILTRO CORRECTO: Buscamos donde nosotros somos la empresa AUDITORA
-    // También soportamos compatibilidad si en el pasado se guardó en 'id_empresa'
+    // Filtramos buscando donde NOSOTROS somos la empresa auditora
     const misSolicitudes = solicitudes.filter(s => {
-      const sIdAuditora = Number(s.id_empresa_auditora);
-      const sIdEmpresa = Number(s.id_empresa); // Compatibilidad
-      
-      // Si existe id_empresa_auditora, úsalo. Si no, usa id_empresa (asumiendo error previo donde se guardó ahí)
-      if (s.id_empresa_auditora) {
-        return sIdAuditora === idEmpresaAuditora;
-      }
-      return sIdEmpresa === idEmpresaAuditora; 
+      const ownerId = s.id_empresa_auditora ? Number(s.id_empresa_auditora) : Number(s.id_empresa);
+      return ownerId === idEmpresaAuditora;
     });
 
     const data = misSolicitudes.map(s => {
       let nombreCliente = 'Desconocido';
-      const idClienteEmpresa = s.id_empresa_cliente || s.id_empresa; // Fallback
+      const targetId = s.id_empresa_cliente || (s.id_empresa !== idEmpresaAuditora ? s.id_empresa : null);
       
-      if (idClienteEmpresa) {
-        const empresa = empresas.find(e => e.id_empresa === Number(idClienteEmpresa));
+      if (targetId) {
+        const empresa = empresas.find(e => e.id_empresa === Number(targetId));
         if (empresa) nombreCliente = empresa.nombre;
       }
+      
       return {
         ...s,
         nombre_empresa_cliente: nombreCliente,
@@ -390,6 +373,7 @@ router.get('/auditorias/:idEmpresa', authenticate, authorize([1]), async (req, r
         ...auditoria,
         modulos,
         fecha_creacion: auditoria.creada_en || auditoria.creado_en,
+        monto: auditoria.monto || null,
         cliente: cliente ? {
           id_usuario: cliente.id_usuario,
           nombre: cliente.nombre,
@@ -491,7 +475,6 @@ router.post('/auditorias/:idAuditoria/modulos', authenticate, authorize([1]), as
   const { id_modulo } = req.body;
 
   const am = await readJson('auditoria_modulos.json');
-  // (Omitiendo validaciones profundas por brevedad, asumir control frontend)
   
   const nuevo = {
     id_auditoria_modulo: await getNextId('auditoria_modulos.json', 'id_auditoria_modulo'),
@@ -550,22 +533,142 @@ router.get('/clientes-con-auditorias', authenticate, authorize([1]), async (req,
 });
 
 // ==========================================
-// 6. REPORTES Y EVIDENCIAS (VISUALIZACIÓN)
+// 6. MENSAJERÍA Y CHAT (¡LA PARTE QUE FALTABA!)
 // ==========================================
 
-// Reporte Final
+// GET /api/supervisor/conversaciones
+// Lista conversaciones de la empresa del supervisor
+router.get('/conversaciones', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = req.user.id_empresa;
+    
+    const conversaciones = await readJson('conversaciones.json');
+    const mensajes = await readJson('mensajes.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
+
+    // Filtrar conversaciones de la empresa
+    const misConversaciones = conversaciones.filter(c => c.id_empresa_auditora === idEmpresa && c.activo);
+
+    const listaFinal = misConversaciones.map(conv => {
+      // Último mensaje
+      const msgs = mensajes.filter(m => m.id_conversacion === conv.id_conversacion);
+      const ultimoMensaje = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+
+      const clienteUser = usuarios.find(u => u.id_usuario === conv.id_cliente);
+      const empresaCliente = clienteUser ? empresas.find(e => e.id_empresa === clienteUser.id_empresa) : null;
+
+      return {
+        ...conv,
+        cliente: {
+          id_usuario: conv.id_cliente,
+          nombre: clienteUser?.nombre || 'Usuario',
+          nombre_empresa: empresaCliente?.nombre || 'Empresa Cliente',
+          id_empresa: empresaCliente?.id_empresa 
+        },
+        ultimo_mensaje: ultimoMensaje
+      };
+    });
+
+    listaFinal.sort((a, b) => {
+      const fechaA = a.ultimo_mensaje ? new Date(a.ultimo_mensaje.creado_en) : new Date(a.creado_en);
+      const fechaB = b.ultimo_mensaje ? new Date(b.ultimo_mensaje.creado_en) : new Date(b.creado_en);
+      return fechaB - fechaA;
+    });
+
+    res.json(listaFinal);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error cargando conversaciones' });
+  }
+});
+
+// GET /api/supervisor/mensajes/:idConversacion
+router.get('/mensajes/:idConversacion', authenticate, authorize([1]), async (req, res) => {
+  const idConversacion = Number(req.params.idConversacion);
+  const mensajes = await readJson('mensajes.json');
+  const conversaciones = await readJson('conversaciones.json');
+
+  const conversacion = conversaciones.find(c => c.id_conversacion === idConversacion);
+  if (!conversacion || conversacion.id_empresa_auditora !== req.user.id_empresa) {
+    return res.status(403).json({ message: 'No tienes permiso' });
+  }
+  
+  const historial = mensajes.filter(m => m.id_conversacion === idConversacion);
+  historial.sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en));
+
+  res.json(historial);
+});
+
+// POST /api/supervisor/mensajes
+router.post('/mensajes', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const { id_conversacion, contenido } = req.body;
+    const idUsuario = req.user.id_usuario;
+    
+    if (!id_conversacion || !contenido) return res.status(400).json({ message: 'Faltan datos' });
+
+    const mensajes = await readJson('mensajes.json');
+    const conversaciones = await readJson('conversaciones.json');
+    const usuarios = await readJson('usuarios.json');
+    const empresas = await readJson('empresas.json');
+
+    const idxConv = conversaciones.findIndex(c => c.id_conversacion === Number(id_conversacion));
+    if (idxConv === -1 || conversaciones[idxConv].id_empresa_auditora !== req.user.id_empresa) {
+      return res.status(403).json({ message: 'Conversación no válida' });
+    }
+
+    const idMensaje = await getNextId('mensajes.json', 'id_mensaje');
+    const nuevoMensaje = {
+      id_mensaje: idMensaje,
+      id_conversacion: Number(id_conversacion),
+      emisor_tipo: 'SUPERVISOR',
+      emisor_id: idUsuario,
+      contenido: contenido,
+      creado_en: new Date().toISOString()
+    };
+
+    mensajes.push(nuevoMensaje);
+    await writeJson('mensajes.json', mensajes);
+
+    conversaciones[idxConv].ultimo_mensaje_fecha = nuevoMensaje.creado_en;
+    await writeJson('conversaciones.json', conversaciones);
+
+    // Notificar al cliente
+    try {
+      const empresa = empresas.find(e => e.id_empresa === conversaciones[idxConv].id_empresa_auditora);
+      const nombreEmpresa = empresa ? empresa.nombre : 'Empresa auditora';
+      await crearNotificacion({
+        id_cliente: conversaciones[idxConv].id_cliente,
+        id_auditoria: null,
+        tipo: 'mensaje_nuevo',
+        titulo: 'Nuevo mensaje',
+        mensaje: `Tienes un nuevo mensaje de ${nombreEmpresa}`
+      });
+    } catch (e) { console.error(e); }
+
+    res.status(201).json(nuevoMensaje);
+  } catch (error) {
+    console.error('Error al enviar mensaje:', error);
+    res.status(500).json({ message: 'Error al enviar mensaje' });
+  }
+});
+
+// ==========================================
+// 7. REPORTES Y EVIDENCIAS
+// ==========================================
+
 router.get('/auditorias/:id/reporte-final', authenticate, authorize([1]), async (req, res) => {
   const idAuditoria = Number(req.params.id);
   const reportes = await readJson('reportes.json');
   
-  // Validar permiso empresa...
+  // (Aquí se podría validar id_empresa_auditora si se carga la auditoría)
   const reporte = reportes.find(r => r.id_auditoria === idAuditoria && r.tipo === 'FINAL');
   if(!reporte) return res.status(404).json({ message: 'No existe reporte final' });
   
   res.json(reporte);
 });
 
-// Evidencias
 router.get('/auditorias/:idAuditoria/evidencias', authenticate, authorize([1]), async (req, res) => {
   const idAuditoria = Number(req.params.idAuditoria);
   const evidencias = await readJson('evidencias.json');

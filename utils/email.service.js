@@ -1,52 +1,73 @@
-// backend/utils/email.service.js
-require('dotenv').config(); // 👈 Aseguramos que cargue las variables de entorno
+require('dotenv').config(); 
 const nodemailer = require('nodemailer');
 
+// Validar que las variables existen al iniciar
+if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  console.error('❌ ERROR FATAL: Faltan EMAIL_USER o EMAIL_PASS en el archivo .env');
+}
+
+// Configuración SMTP explícita para Gmail (Más estable que service: 'gmail')
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465, // Puerto seguro SSL
+  secure: true, // true para 465, false para otros puertos
   auth: {
-    // 👇 Aquí usamos las variables del .env
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASS  
-  }
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  },
+  // Opciones de depuración para ver errores en consola
+  debug: true, 
+  logger: true 
 });
 
+// Verificar conexión al iniciar el servicio
+transporter.verify()
+  .then(() => console.log('✅ Servidor de correos listo para enviar mensajes'))
+  .catch((error) => console.error('❌ Error de conexión SMTP:', error));
+
 const enviarNotificacionFinalizacion = async (correoCliente, nombreCliente, nombreEmpresa, nombreReporte) => {
+  // ... (Tu código html anterior está bien, mantenlo)
+  // Solo asegúrate de usar el objeto transporter configurado arriba
+};
+
+const enviarAlertaNotificacion = async (correoDestino, nombreUsuario, titulo, mensaje) => {
   try {
-    // Validación de seguridad para no intentar enviar si faltan credenciales
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn('⚠️ No se han configurado las credenciales de correo en el .env');
-      return false;
-    }
+    console.log(`[Email Service] Intentando enviar a: ${correoDestino}`);
 
     const info = await transporter.sendMail({
-      from: `"AuditCloud System" <${process.env.EMAIL_USER}>`, // Usamos el mismo correo remitente
-      to: correoCliente,
-      subject: `✅ Auditoría Finalizada - ${nombreEmpresa}`,
+      from: `"AuditCloud Alertas" <${process.env.EMAIL_USER}>`,
+      to: correoDestino,
+      subject: `🔔 ${titulo} - AuditCloud`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
-          <h2 style="color: #16a34a;">¡Tu Auditoría ha Finalizado!</h2>
-          <p>Hola <strong>${nombreCliente}</strong>,</p>
-          <p>Te informamos que el proceso de auditoría para tu empresa <strong>${nombreEmpresa}</strong> ha concluido exitosamente.</p>
-          
-          <div style="background-color: #f9fafb; padding: 15px; margin: 20px 0; border-left: 4px solid #16a34a;">
-            <p style="margin: 0;"><strong>Documento generado:</strong> ${nombreReporte}</p>
-            <p style="margin: 5px 0 0 0;">Estado: <span style="color: #16a34a; font-weight: bold;">FINALIZADA</span></p>
+        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #4f46e5; padding: 20px; text-align: center;">
+            <h2 style="color: #ffffff; margin: 0;">Nueva Actividad</h2>
           </div>
-
-          <p>Ya puedes ingresar a la plataforma para descargar tu reporte final y ver la bitácora de actividades.</p>
           
-          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
-          <p style="font-size: 12px; color: #6b7280;">Este es un mensaje automático de AuditCloud.</p>
+          <div style="padding: 20px;">
+            <p>Hola <strong>${nombreUsuario}</strong>,</p>
+            <p>Se ha generado una nueva notificación en tu panel:</p>
+            
+            <div style="background-color: #f3f4f6; padding: 15px; border-left: 4px solid #4f46e5; margin: 20px 0; border-radius: 4px;">
+              <h3 style="margin: 0 0 10px 0; color: #1f2937;">${titulo}</h3>
+              <p style="margin: 0; color: #4b5563;">${mensaje}</p>
+            </div>
+
+            <p style="font-size: 0.9em;">Ingresa a la plataforma para gestionar esta actividad.</p>
+          </div>
+          
+          <div style="background-color: #f9fafb; padding: 10px; text-align: center; border-top: 1px solid #e0e0e0;">
+            <p style="font-size: 12px; color: #888; margin: 0;">Este es un mensaje automático, por favor no responder.</p>
+          </div>
         </div>
       `
     });
-    console.log('📧 Correo enviado correctamente: %s', info.messageId);
+    console.log('📧 Email enviado ID:', info.messageId);
     return true;
   } catch (error) {
-    console.error('❌ Error enviando correo:', error);
+    console.error('❌ Error enviando alerta de correo:', error);
     return false;
   }
 };
 
-module.exports = { enviarNotificacionFinalizacion };
+module.exports = { enviarNotificacionFinalizacion, enviarAlertaNotificacion };

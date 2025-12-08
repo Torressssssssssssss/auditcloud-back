@@ -817,6 +817,7 @@ router.put('/notificaciones/:idCliente/leer-todas', authenticate, authorize([3])
   }
 });
 
+
 // ==========================================
 // RUTAS DE REPORTES
 // ==========================================
