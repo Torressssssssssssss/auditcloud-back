@@ -675,4 +675,41 @@ router.get('/auditorias/:idAuditoria/evidencias', authenticate, authorize([1]), 
   res.json(evidencias.filter(e => e.id_auditoria === idAuditoria));
 });
 
+// GET /api/supervisor/empresas-clientes
+// Obtiene todas las empresas que son clientes (Tipo 2)
+router.get('/empresas-clientes', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const empresas = await readJson('empresas.json');
+    // Filtramos solo las que son clientes (tipo 2) y están activas
+    const clientes = empresas.filter(e => e.id_tipo_empresa === 2 && e.activo);
+    
+    res.json(clientes.map(c => ({
+      id_empresa: c.id_empresa,
+      nombre: c.nombre
+    })));
+  } catch (error) {
+    res.status(500).json({ message: 'Error cargando empresas' });
+  }
+});
+
+// GET /api/supervisor/usuarios-empresa/:idEmpresa
+// Obtiene los usuarios (contactos) de una empresa específica
+router.get('/usuarios-empresa/:idEmpresa', authenticate, authorize([1]), async (req, res) => {
+  try {
+    const idEmpresa = Number(req.params.idEmpresa);
+    const usuarios = await readJson('usuarios.json');
+    
+    // Filtramos usuarios de esa empresa con rol Cliente (3)
+    const contactos = usuarios.filter(u => u.id_empresa === idEmpresa && u.id_rol === 3 && u.activo);
+    
+    res.json(contactos.map(u => ({
+      id_usuario: u.id_usuario,
+      nombre: u.nombre,
+      correo: u.correo
+    })));
+  } catch (error) {
+    res.status(500).json({ message: 'Error cargando usuarios' });
+  }
+});
+
 module.exports = router;

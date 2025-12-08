@@ -9,7 +9,7 @@ const path = require('path');
 const { readEncryptedJson, writeEncryptedJson, isEncrypted } = require('./utils/encryption');
 
 async function cifrarArchivosExistentes() {
-  console.log('🔐 Cifrando archivos JSON existentes...\n');
+  console.log('[Cifrado] Iniciando cifrado de archivos JSON existentes...\n');
 
   const dataDir = path.join(__dirname, 'data');
   
@@ -19,7 +19,7 @@ async function cifrarArchivosExistentes() {
     const jsonFiles = files.filter(f => f.endsWith('.json'));
 
     if (jsonFiles.length === 0) {
-      console.log('No se encontraron archivos JSON para cifrar.\n');
+      console.log('[Cifrado] No se encontraron archivos JSON para cifrar.\n');
       return;
     }
 
@@ -35,10 +35,10 @@ async function cifrarArchivosExistentes() {
         const rawData = await fs.promises.readFile(filePath);
         
         if (isEncrypted(rawData)) {
-          console.log(`   ✅ ${file} - Ya estaba cifrado`);
+          console.log(`[Cifrado] ${file} - Ya estaba cifrado`);
           yaCifrados++;
         } else {
-          console.log(`   🔄 ${file} - Cifrando...`);
+          console.log(`[Cifrado] ${file} - Cifrando...`);
           
           // Leer el contenido (sin cifrar)
           const jsonString = rawData.toString('utf8');
@@ -50,40 +50,40 @@ async function cifrarArchivosExistentes() {
           // Verificar que se cifró correctamente
           const verifyData = await fs.promises.readFile(filePath);
           if (isEncrypted(verifyData)) {
-            console.log(`   ✅ ${file} - Cifrado correctamente`);
+            console.log(`[Cifrado] ${file} - Cifrado correctamente`);
             cifrados++;
           } else {
-            console.log(`   ❌ ${file} - Error: No se cifró correctamente`);
+            console.log(`[Cifrado] ${file} - Error: No se cifró correctamente`);
             errores++;
           }
         }
       } catch (error) {
-        console.error(`   ❌ ${file} - Error: ${error.message}`);
+        console.error(`[Cifrado] ${file} - Error: ${error.message}`);
         errores++;
       }
     }
 
-    console.log('\n📊 Resumen:');
-    console.log(`   ✅ Cifrados: ${cifrados}`);
-    console.log(`   ℹ️  Ya estaban cifrados: ${yaCifrados}`);
-    console.log(`   ❌ Errores: ${errores}`);
-    console.log(`   📁 Total: ${jsonFiles.length}\n`);
+    console.log('\n[Cifrado] Resumen:');
+    console.log(`  Cifrados: ${cifrados}`);
+    console.log(`  Ya estaban cifrados: ${yaCifrados}`);
+    console.log(`  Errores: ${errores}`);
+    console.log(`  Total: ${jsonFiles.length}\n`);
 
     if (cifrados > 0) {
-      console.log('✅ Todos los archivos han sido cifrados correctamente!\n');
+      console.log('[Cifrado] Todos los archivos han sido cifrados correctamente!\n');
     } else if (yaCifrados === jsonFiles.length) {
-      console.log('ℹ️  Todos los archivos ya estaban cifrados.\n');
+      console.log('[Cifrado] Todos los archivos ya estaban cifrados.\n');
     }
 
   } catch (error) {
-    console.error('❌ Error fatal:', error);
+    console.error('[Cifrado] Error fatal:', error);
     process.exit(1);
   }
 }
 
 // Ejecutar
 cifrarArchivosExistentes().catch(error => {
-  console.error('❌ Error fatal:', error);
+  console.error('[Cifrado] Error fatal:', error);
   process.exit(1);
 });
 
