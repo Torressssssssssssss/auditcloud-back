@@ -16,7 +16,14 @@ const app = express();
 const PORT = 3000;
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:4200', 
+    'http://10.187.164.6',      // Si sirves el front en puerto 80
+    'http://10.187.164.6:4200'  // Si sirves el front en puerto 4200
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // Rutas
