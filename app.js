@@ -83,6 +83,6 @@ app.get('/', (req, res) => {
   res.send('AuditCloud backend con JSON está vivo 🛰️');
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor backend corriendo en http://0.0.0.0:${PORT}`);
 });
