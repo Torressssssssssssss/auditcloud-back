@@ -24,17 +24,9 @@ function normalizeOrigin(origin) {
 }
 
 function getAllowedOrigins() {
-  const defaultOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
+  const defaultOrigins = process.env.NODE_ENV === 'production' ? [] : [
     'http://localhost:4200',
-    'http://127.0.0.1:4200',
-    'http://192.168.1.30:4200',
-    'http://192.168.1.243:3000',
-    'http://192.168.1.243:4200',
-    'http://192.168.30.1:4200',
-    'http://192.168.1.243:4300',
-    'http://192.168.30.1:4300'
+    'http://127.0.0.1:4200'
   ];
 
   const frontendUrl = process.env.FRONTEND_URL;
@@ -42,7 +34,7 @@ function getAllowedOrigins() {
     ? frontendUrl.split(',').map(normalizeOrigin).filter(Boolean)
     : [];
 
-  return [...new Set([...envOrigins, ...defaultOrigins].map(normalizeOrigin).filter(Boolean))];
+  return [...new Set(envOrigins.length ? envOrigins : defaultOrigins)];
 }
 
 const corsOptions = {
@@ -129,6 +121,6 @@ app.get('/', (req, res) => {
   res.send('AuditCloud backend con JSON está vivo 🛰️');
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor backend corriendo en http://0.0.0.0:${PORT}`);
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`🚀 Servidor backend corriendo en http://127.0.0.1:${PORT}`);
 });
